@@ -265,7 +265,18 @@ wake_draw() {
 # explicitly before an idle-sensitive combo. Wiring wake_draw as the per-input
 # hook made every key first move+jiggle the cursor, which perturbed mode-sensitive
 # combos (text ctrl+u underline, polygon ctrl+z undo) → "regions identical".
-adapter_pre_input() { draw_focus; }
+adapter_pre_input() {
+    draw_focus
+    # Jiggle the cursor IN PLACE (±1px, nets to zero — no reposition) so DRAW's
+    # idle detector (FRAME_IDLE% via a mouseMoved% event) wakes and the following
+    # input isn't dropped. This is the best of both: it wakes like wake_draw but,
+    # unlike wake_draw, it does NOT move the cursor to a park spot — that absolute
+    # move is what perturbed mode-sensitive combos (text Ctrl+U, polygon Ctrl+Z).
+    # Plain draw_focus alone (no jiggle) left DRAW idle, so drag-paint tests
+    # (edit-stroke-selection, layer-group-auto-layer) dropped their stroke.
+    xdotool mousemove_relative -- 1 0 2>/dev/null
+    xdotool mousemove_relative -- -1 0 2>/dev/null
+}
 
 # canvas_focus [restore_key] — give DRAW focus by clicking the canvas centre with
 # the Move tool (non-destructive), then optionally restore the prior tool. NOT
