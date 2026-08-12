@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# qa — entry point. Loads the portable core, one platform driver, and one app
+# adapter, then hands control to the core runner.
+#
+#   bin/qa --adapter adapters/draw [--driver linux-x11] [core flags…] [tests…]
+#
+# The driver defaults to linux-x11 (the only one today). Everything after is
+# passed through to the core runner (see core/runner.sh --help), e.g.
+# --offscreen/--onscreen/--mode, --eta, --report, --status, --rerun-passed.
+#
+# NOTE: skeleton. core/ and drivers/ are being ported out of DRAW/QA/draw-qa.sh;
+# until that lands this loader validates wiring and reports what's missing.
+set -u
+HERE="$(cd "$(dirname "$0")/.." && pwd)"
+
+DRIVER="linux-x11"
+ADAPTER=""
+PASS_ARGS=()
+while (( $# )); do
+    case "$1" in
+        --adapter) ADAPTER="$2"; shift 2 ;;
+        --driver)  DRIVER="$2";  shift 2 ;;
+        *)         PASS_ARGS+=("$1"); shift ;;
+    esac
+done
+
+die() { echo "qa: $*" >&2; exit 2; }
+[[ -n "$ADAPTER" ]] || die "no --adapter given (e.g. --adapter adapters/draw)"
+
+# Resolve adapter manifest (accept a dir or a file).
+MANIFEST="$ADAPTER"
+[[ -d "$MANIFEST" ]] && MANIFEST="$MANIFEST/manifest.sh"
+[[ -f "$MANIFEST" ]] || die "adapter manifest not found: $MANIFEST"
+
+DRIVER_SH="$HERE/drivers/$DRIVER/driver.sh"
+CORE_SH="$HERE/core/runner.sh"
+[[ -f "$DRIVER_SH" ]] || die "driver not found: $DRIVER_SH"
+[[ -f "$CORE_SH"   ]] || die "core runner not found: $CORE_SH (skeleton: not yet ported)"
+
+export QA_HARNESS_ROOT="$HERE"
+export QA_REPORT_PY="$HERE/report/qa-report.py"
+
+# Load order matters: driver defines the input/capture/target verbs, the adapter
+# defines app facts (and may call driver verbs), the core wires and runs.
+# shellcheck source=/dev/null
+source "$DRIVER_SH"
+# shellcheck source=/dev/null
+source "$MANIFEST"
+# shellcheck source=/dev/null
+source "$CORE_SH"
+
+qa_main "${PASS_ARGS[@]}"
