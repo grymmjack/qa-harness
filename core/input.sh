@@ -50,8 +50,8 @@ drag() {
     dbg "drag vp=($x1,$y1)→($x2,$y2) abs=($ax1,$ay1)→($ax2,$ay2) btn=$btn"
     driver_input_move "$ax1" "$ay1"
     sleep 0.1
-    driver_input_button down "$btn"
-    driver_input_move $(( ax1 + 1 )) "$ay1"
+    # Atomic press+motion so DRAW registers a real drag-start (see driver note).
+    driver_input_button_move down "$btn" $(( ax1 + 1 )) "$ay1"
     sleep 0.05
     driver_input_move "$ax2" "$ay2"
     sleep 0.15

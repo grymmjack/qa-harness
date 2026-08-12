@@ -32,6 +32,17 @@ driver_input_button() { # down|up|click  1|2|3
         click) xdotool click     "$2" ;;
     esac
 }
+# Atomic press/release WITH pointer motion in one XTEST batch. SDL2 reliably
+# registers button events that carry motion, so DRAW sees a real drag-start;
+# splitting the press and the move into two calls can read as a click without
+# motion (e.g. auto-add-layer paint then gets REFUSED). Mirrors draw-qa.sh's
+# `xdotool mousedown "$btn" mousemove …`. Used by the core drag verb.
+driver_input_button_move() { # down|up  btn  [x y]
+    case "$1" in
+        down)  xdotool mousedown "$2" mousemove "$3" "$4" ;;
+        up)    xdotool mouseup   "$2" ;;
+    esac
+}
 
 # driver_input_key <combo> — send ONE key combo (the caller loops over several).
 #
