@@ -16,7 +16,7 @@ _RD_TITLE="qa-demo"
 adapter_launch() {
     local timeout=${1:-15}
     [[ -x "$_RD_BIN" ]] || { echo "rust-demo: build it first: (cd examples/rust-demo && cargo build --release)" >&2; return 1; }
-    "$_RD_BIN" >/dev/null 2>&1 &
+    "$_RD_BIN" >/dev/null 2>"${QA_RD_STDERR:-/dev/null}" &
     ADAPTER_PID=$!
     # Wait for the window to appear (title match), up to timeout.
     local t=0
@@ -39,7 +39,7 @@ adapter_quit() {
 
 # ── 3. Window match — by title (no window id needed) ─────────────────────────
 adapter_window_bounds() {
-    driver_window_bounds_by_title "$_RD_TITLE"
+    driver_window_bounds_by_title "$_RD_TITLE" "${ADAPTER_PID:-}"
 }
 
 # ── 4. Logical → screen — window-relative, 1:1 (the DEFAULT; no viewport) ─────
@@ -58,5 +58,16 @@ adapter_ensure_config() { : ; }
 # ── 6. Lifecycle hooks ───────────────────────────────────────────────────────
 adapter_is_alive()     { [[ -n "${ADAPTER_PID:-}" ]] && kill -0 "$ADAPTER_PID" 2>/dev/null; }
 adapter_crashlog_dir() { echo ""; }          # no crash log
-adapter_pre_input()    { : ; }               # no idle-drop; input lands immediately
+
+# Focus/raise the window before input & capture. Under a WM-less Xvfb (the
+# offscreen/CI path) nothing sets input focus, so keystrokes and even clicks
+# never reach the window until we XSetInputFocus it — hence windowfocus --sync.
+# (SDL2 apps like DRAW grab focus on creation; a plain minifb window does not.)
+_rd_wid() { xdotool search --name "$_RD_TITLE" 2>/dev/null | head -1; }
+adapter_focus() {
+    local w; w=$(_rd_wid); [[ -n "$w" ]] || return 0
+    xdotool windowfocus --sync "$w" 2>/dev/null || xdotool windowfocus "$w" 2>/dev/null || true
+    xdotool windowraise "$w" 2>/dev/null || true
+}
+adapter_pre_input()    { adapter_focus; }    # focus before every dispatched click/key
 adapter_park_window()  { : ; }               # not needed; bounds come from xdotool

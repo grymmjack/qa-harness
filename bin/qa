@@ -39,6 +39,11 @@ CORE_SH="$HERE/core/runner.sh"
 
 export QA_HARNESS_ROOT="$HERE"
 export QA_REPORT_PY="$HERE/report/qa-report.py"
+# For the offscreen self-wrap (core re-execs this loader under Xvfb).
+export QA_SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+export QA_ADAPTER_ARG="$ADAPTER"
+export QA_DRIVER_ARG="$DRIVER"
+export QA_ADAPTER_DIR="$(cd "$(dirname "$MANIFEST")" && pwd)"
 
 # Load order matters: driver defines the input/capture/target verbs, the adapter
 # defines app facts (and may call driver verbs), the core wires and runs.
