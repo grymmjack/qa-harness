@@ -259,7 +259,13 @@ wake_draw() {
     xdotool mousemove_relative -- -1 0
     sleep 0.03
 }
-adapter_pre_input() { wake_draw; }
+# Before each dispatched input, match the ORIGINAL draw-qa.sh: its click/drag/key/
+# type_text did `draw_focus` only — a lightweight window focus, NOT a cursor
+# jiggle. wake_draw (mouse move-to-park + jiggle) is a SEPARATE helper tests call
+# explicitly before an idle-sensitive combo. Wiring wake_draw as the per-input
+# hook made every key first move+jiggle the cursor, which perturbed mode-sensitive
+# combos (text ctrl+u underline, polygon ctrl+z undo) → "regions identical".
+adapter_pre_input() { draw_focus; }
 
 # canvas_focus [restore_key] — give DRAW focus by clicking the canvas centre with
 # the Move tool (non-destructive), then optionally restore the prior tool. NOT
