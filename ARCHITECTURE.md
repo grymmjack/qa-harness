@@ -63,6 +63,47 @@ app expects — an app that derives its size from the screen needs the right res
 desktop and every region diff compares a static wrong frame. The runner emits
 `report.html` + `junit.xml` and exits non-zero on any failure — the CI signal.
 
+### No window manager offscreen — the mid-test-relaunch trap
+
+`xvfb-run` starts a bare X server with **no window manager**. That is fine for
+most tests, but it bites any test that **quits and relaunches the app mid-file**
+(e.g. to reload a changed config). Two facts combine into a real failure:
+
+- Many toolkits (SDL2 / QB64-PE) set **no `_NET_WM_PID`** on their windows, so
+  `xdotool search --pid <PID> --name <title>` silently does **not** filter — a
+  bogus pid still matches every window with that title. Window matching is
+  title-only in practice.
+- With no WM, a dying window is **not reaped promptly** — it stays mapped for a
+  beat after the process is signalled.
+
+So when a test does `quit; launch`, the relaunch's title search can bind the
+**previous instance's still-mapped window** (a stale id). The new window is then
+mis-parked, and every subsequent click/key misses the real canvas — the classic
+"regions are identical (action had no effect?)" that reads like an app bug.
+Whether it bites depends on a **race**: if the new window is slow to appear
+(loading a file) the old one is gone first and the bind is correct; if it appears
+fast (a blank relaunch) it races the dying window and binds the stale one. So the
+*same* harness passes a slow-relaunch test and fails a fast-relaunch one.
+
+The obvious fix — make the quit **block until the old window is gone** before the
+relaunch — is a trap for a subtler reason: DRAW's own startup proved **sensitive
+to instance-death timing**. Forcing the outgoing instance fully dead before the
+incoming one launches deterministically broke the *next* instance's first Ctrl+S
+save (its `file-draw-roundtrip` test), while a `windowunmap` of the old window
+corrupted the incoming instance's input entirely. The two relaunch tests want
+opposite things from the quit→launch overlap, and no title/pid/unmap trick
+reconciles them offscreen (verified exhaustively: SIGTERM-only, SIGKILL, fixed
+sleep, config re-assert, new-window-id detection, and windowunmap all trade one
+failure for the other).
+
+**The clean fixes are environmental, not harness-logic:** (a) run a lightweight
+WM (`openbox &`) inside the Xvfb session so dying windows are reaped instantly
+and focus is assigned — offscreen then behaves like onscreen; or (b) have the app
+toolkit set `_NET_WM_PID` so `--pid` matching actually works. Until then,
+**mid-test-relaunch tests are onscreen-reliable and offscreen-racy** — run them
+with `--onscreen` (where a real WM reaps the old window immediately, which is why
+they pass there and passed on the pre-toolkit harness).
+
 ## Port checklist — lifting CORE out of the original `draw-qa.sh`
 
 The reference script `DRAW/QA/draw-qa.sh` is the source of truth for the port.
