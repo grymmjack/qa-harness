@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Minimal Openbox config for the offscreen (Xvfb) QA session.
+
+  A window manager is present offscreen for one reason: to REAP a dying app
+  window promptly and to assign input focus — matching how the app behaves on a
+  real desktop. It must NOT change geometry, or every coordinate test drifts.
+
+  So: no decorations (no title bar to shift the client origin), no auto-placement
+  or maximization (the adapter parks the window itself, e.g. DRAW's super+Home),
+  and focus follows the app. The harness reads the reparenting-aware client-area
+  origin via xwininfo regardless, but undecorating keeps the two environments
+  (WM / no-WM) pixel-identical.
+-->
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <focus>
+    <focusNew>yes</focusNew>
+    <followMouse>no</followMouse>
+    <focusLast>yes</focusLast>
+  </focus>
+  <placement>
+    <policy>UnderMouse</policy>
+  </placement>
+  <theme>
+    <!-- No frame elements: the window is drawn as bare client, no title bar. -->
+    <keepBorder>no</keepBorder>
+    <animateIconify>no</animateIconify>
+  </theme>
+  <applications>
+    <!-- Every window: undecorated, never auto-maximized, honor its own size. -->
+    <application class="*">
+      <decor>no</decor>
+      <maximized>no</maximized>
+    </application>
+  </applications>
+</openbox_config>

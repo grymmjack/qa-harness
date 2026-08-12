@@ -394,6 +394,24 @@ draw_quit() {
         DRAW_WID=""
     fi
 }
+
+# draw_settle — block (bounded) until NO "DRAW v" window is mapped. Call it
+# between draw_quit and draw_launch in a test that relaunches with a BLANK
+# document (which appears fast enough to race the outgoing instance's still-dying
+# window). DRAW/SDL2 sets no _NET_WM_PID, so the relaunch's title search can't
+# tell the two apart and binds the stale one → every input misses the canvas.
+#
+# This is OPT-IN, not baked into draw_quit, on purpose: forcing every quit to
+# wait for the old instance to fully die reproducibly breaks the NEXT instance's
+# first Ctrl+S save (file-draw-roundtrip) — DRAW's startup is sensitive to the
+# quit→launch overlap. A file-loading relaunch is slow enough that the old window
+# is already gone, so those tests must NOT call this and keep the overlap.
+draw_settle() {
+    local i=0
+    while [[ $i -lt 60 ]] && [[ -n "$(xdotool search --name "$WINDOW_TITLE" 2>/dev/null)" ]]; do
+        sleep 0.1; i=$(( i + 1 ))
+    done
+}
 adapter_quit() { draw_quit; }
 
 # ── lifecycle hooks used by the core's crash/window assertions ───────────────

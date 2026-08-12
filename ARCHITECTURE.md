@@ -85,24 +85,40 @@ Whether it bites depends on a **race**: if the new window is slow to appear
 fast (a blank relaunch) it races the dying window and binds the stale one. So the
 *same* harness passes a slow-relaunch test and fails a fast-relaunch one.
 
-The obvious fix — make the quit **block until the old window is gone** before the
-relaunch — is a trap for a subtler reason: DRAW's own startup proved **sensitive
-to instance-death timing**. Forcing the outgoing instance fully dead before the
-incoming one launches deterministically broke the *next* instance's first Ctrl+S
-save (its `file-draw-roundtrip` test), while a `windowunmap` of the old window
-corrupted the incoming instance's input entirely. The two relaunch tests want
-opposite things from the quit→launch overlap, and no title/pid/unmap trick
-reconciles them offscreen (verified exhaustively: SIGTERM-only, SIGKILL, fixed
-sleep, config re-assert, new-window-id detection, and windowunmap all trade one
-failure for the other).
+The obvious fix — make **every** quit block until the old window is gone before
+the relaunch — is a trap: DRAW's own startup proved **sensitive to instance-death
+timing**. Forcing the outgoing instance fully dead before the incoming one
+launches deterministically broke the *next* instance's first Ctrl+S save (its
+`file-draw-roundtrip` test), while a `windowunmap` of the old window corrupted the
+incoming instance's input entirely. A file-loading relaunch is slow enough that
+the old window is already gone (no race); a blank relaunch is not. So the two
+relaunch tests want *opposite* things from the quit→launch overlap, and a blanket
+quit-side wait can't serve both (verified exhaustively: SIGTERM-only, SIGKILL,
+fixed sleep, config re-assert, new-window-id detection, and windowunmap each
+traded one failure for the other).
 
-**The clean fixes are environmental, not harness-logic:** (a) run a lightweight
-WM (`openbox &`) inside the Xvfb session so dying windows are reaped instantly
-and focus is assigned — offscreen then behaves like onscreen; or (b) have the app
-toolkit set `_NET_WM_PID` so `--pid` matching actually works. Until then,
-**mid-test-relaunch tests are onscreen-reliable and offscreen-racy** — run them
-with `--onscreen` (where a real WM reaps the old window immediately, which is why
-they pass there and passed on the pre-toolkit harness).
+**The fix has two parts, and both ship here:**
+
+1. **A window manager offscreen** (`driver_run_offscreen` starts `openbox` inside
+   the Xvfb session, bundled `drivers/linux-x11/openbox-rc.xml` undecorates every
+   window so geometry is pixel-identical to bare Xvfb). This assigns input focus
+   the way a real desktop does — without it, a plain-X relaunch can leave the new
+   instance unfocused and it may even die mid-test. Disable with
+   `QA_OFFSCREEN_WM=none`. The WM alone does **not** fix the stale-window race
+   (the dying *process* still owns its window until it exits), hence part 2.
+2. **An opt-in `draw_settle`** (adapter helper): a test that relaunches with a
+   *blank* document calls `draw_quit; draw_settle; draw_launch`, and `draw_settle`
+   blocks until no app window remains — killing the race for exactly the tests
+   that hit it, while file-loading relaunches skip it and keep the overlap their
+   save depends on. Keeping the wait **out of `draw_quit`** is the whole point:
+   the two failure modes are irreconcilable from a single shared quit path, so the
+   decision lives with the test that knows its relaunch is fast.
+
+Onscreen this is all moot — a real WM reaps the old window immediately, which is
+why these tests passed there and on the pre-toolkit harness. The lesson
+generalizes: **an app that sets no `_NET_WM_PID` cannot be window-matched by pid,
+so mid-test relaunches need either a WM (for focus/lifecycle) or an explicit
+settle (for the stale-window race), and often both.**
 
 ## Port checklist — lifting CORE out of the original `draw-qa.sh`
 

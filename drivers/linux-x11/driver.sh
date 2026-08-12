@@ -168,11 +168,41 @@ driver_offscreen_available() { command -v xvfb-run &>/dev/null && command -v Xvf
 # region diff compares a static wrong frame (capture-backend rule). The Xvfb
 # screen must match what the app expects (an app that derives its size from the
 # screen needs the right res). Ported from draw-qa.sh's Xvfb self-wrap.
+#
+# A lightweight window manager (openbox) is started INSIDE the Xvfb session when
+# available. Bare Xvfb has no WM, so a dying app window is not reaped promptly and
+# input focus is never assigned — which breaks any test that quits+relaunches the
+# app mid-file: the relaunch binds the previous instance's still-mapped window
+# (apps like SDL2/QB64-PE set no _NET_WM_PID, so xdotool can't tell two same-title
+# windows apart). With a WM the old window is torn down and focus follows the new
+# one, so offscreen matches onscreen. The bundled openbox-rc.xml undecorates every
+# window so geometry is pixel-identical to the no-WM case. Disable with
+# QA_OFFSCREEN_WM=none; the harness still works, minus mid-relaunch reliability.
 driver_run_offscreen() {
     local res="${QA_XVFB_RES:-}"
     if [[ -z "$res" ]]; then
         command -v xdotool &>/dev/null && res=$(xdotool getdisplaygeometry 2>/dev/null) && res="${res// /x}"
         [[ -z "$res" ]] && res="1920x1080"
     fi
-    env -u WAYLAND_DISPLAY xvfb-run -a --server-args="-screen 0 ${res}x24" "$@"
+    local wm="${QA_OFFSCREEN_WM:-openbox}"
+    local rc="${BASH_SOURCE%/*}/openbox-rc.xml"
+    export QA_OFFSCREEN_WM="$wm" QA_OFFSCREEN_WM_RC="$rc"
+    # Start the WM inside the just-created Xvfb, then exec the real command in the
+    # same X server. $DISPLAY is set by xvfb-run before this inner shell runs.
+    env -u WAYLAND_DISPLAY xvfb-run -a --server-args="-screen 0 ${res}x24" \
+        bash -c '
+            if [ "${QA_OFFSCREEN_WM}" != none ] && command -v "${QA_OFFSCREEN_WM}" >/dev/null 2>&1; then
+                if [ -f "${QA_OFFSCREEN_WM_RC}" ]; then
+                    "${QA_OFFSCREEN_WM}" --sm-disable --config-file "${QA_OFFSCREEN_WM_RC}" >/dev/null 2>&1 &
+                else
+                    "${QA_OFFSCREEN_WM}" --sm-disable >/dev/null 2>&1 &
+                fi
+                # Give the WM a beat to own the root window before the app maps.
+                for _i in 1 2 3 4 5 6 7 8 9 10; do
+                    xprop -root _NET_SUPPORTING_WM_CHECK >/dev/null 2>&1 && break
+                    sleep 0.1
+                done
+            fi
+            exec "$@"
+        ' bash "$@"
 }
