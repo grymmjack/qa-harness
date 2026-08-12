@@ -212,6 +212,12 @@ adapter_to_screen() {
     [[ -z "$WIN_ABS_X" ]] && _update_win_pos
     echo $(( WIN_ABS_X + $1 * DISPLAY_SCALE )) $(( WIN_ABS_Y + DECORATION_H + $2 * DISPLAY_SCALE ))
 }
+# DRAW's tests call `_abs vx vy` directly when they drop to raw xdotool for
+# multi-step gestures (pan, hold-key drags, mid-drag key taps). Expose it under
+# that name — same as draw_focus below. Without this the tests get empty coords
+# ("" ""), the gesture is a no-op, and every _abs-using test fails "regions
+# identical". (Missed in the initial port; found dogfooding the full suite.)
+_abs() { adapter_to_screen "$@"; }
 
 # ── 3. Window match — returns the CLIENT rect: "X Y W H" (physical px) ────────
 # X/Y = client origin; W/H = viewport × DISPLAY_SCALE (what the core crops to for
