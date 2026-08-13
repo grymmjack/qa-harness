@@ -142,6 +142,14 @@ Classification (→ where each piece lands):
 - input verb bodies (`click/drag/key/type_text/scroll_*`) — xdotool
 - `_update_win_pos` (xwininfo), `_detect_decoration_height`, offscreen launch
 
+> **Per-platform input gotcha (macOS).** A driver sends the OS-level click, but the
+> app's GUI toolkit can rewrite it before the app sees it. On macOS, apps built on
+> GLUT/GLUT-emulation (e.g. QB64-PE, DRAW's toolkit) remap **Ctrl+Click → right**
+> and **Option+Click → middle** by default on a one-button device — so a macOS
+> driver/adapter must neutralize that (disable the emulation at launch) or every
+> `with_mods ctrl|alt click` test reads a different button than intended. See
+> `adapters/draw/README.md` → "macOS caveat".
+
 **→ adapters/draw/** (app-specific)
 - `_qa_cfg_overrides/_ensure_qa_cfg` (blessed cfg), `_cfg` readers
 - `draw_launch/draw_quit`, `WINDOW_TITLE`, `_verify_geometry_model`
