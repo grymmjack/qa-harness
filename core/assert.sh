@@ -273,12 +273,20 @@ assert_regions_same() {
 # classic "cursor buried beneath a floating window / overlay" z-order bug. This is
 # the generic guard for render-order-vs-input-order seams; point it at any
 # overlapping overlay (a floating window, a panel edge, a popup).
+# assert_cursor_on_top X Y [MSG] [HALF] — HALF is the half-size of the sampled
+# box (default 16 → a 32x32 window). It must be large enough to contain the
+# cursor sprite, which typically extends DOWN-RIGHT from its hotspot at (X,Y):
+# a too-tight box (e.g. 6) sits inside the sprite's transparent corner and reads
+# a false "identical". Keep HALF small enough that the box stays within the one
+# element under test. A settle after hover lets an idle/throttled app (e.g. one
+# capped at 15fps ≈ 66ms/frame) actually render the cursor frame before capture.
 assert_cursor_on_top() {
-    local x=$1 y=$2 msg=${3:-"cursor should render on top at ($x,$y)"} half=6
+    local x=$1 y=$2 msg=${3:-"cursor should render on top at ($x,$y)"} half=${4:-16}
     park_mouse
     snap_region $(( x - half )) $(( y - half )) $(( half * 2 )) $(( half * 2 )) "curtop-base"
     local base="$SNAP_RESULT"
     hover "$x" "$y"
+    sleep 0.25   # let a throttled/idle app render the cursor frame before we capture
     snap_region $(( x - half )) $(( y - half )) $(( half * 2 )) $(( half * 2 )) "curtop-cur"
     assert_regions_differ "$base" "$SNAP_RESULT" "$msg"
 }
