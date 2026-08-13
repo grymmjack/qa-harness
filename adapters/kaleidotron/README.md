@@ -37,6 +37,11 @@ asserts on pixels for something no in-process test can observe.
 | `table.sh` | the hand-rolled table paints rows with thumbnails, and toggling back restores the grid |
 | `chrome.sh` | docks resize the central panel; F11 immersive hides and restores the chrome |
 | `rating.sh` | a star rating paints in the caption, on the **hovered** tile rather than the first one |
+| `recolor.sh` | an adjustment repaints both the viewer and the pane preview; the palette strip draws; Reset restores exactly |
+| `transparency.sh` | a transparent pixel shows the **backdrop**, not the plain viewer background |
+| `anim.sh` | an unhovered GIF stays still; a hovered one advances frames |
+| `selection.sh` | the selection highlight and the viewed check are painted on the tile |
+| `search.sh` | the `/` filter re-lays-out the grid, and clearing restores it exactly |
 
 ## What this adapter has to say about the app
 
