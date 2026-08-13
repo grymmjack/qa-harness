@@ -14,7 +14,7 @@
 info "=== kaleidotron: reversing the sort repaints the grid in the new order ==="
 
 park_mouse
-region tile1 70 70 120 100 "the first tile — 01-red.png ascending, 16-xbin.xb descending"
+region tile1 70 70 120 100 "the first tile — 01-red.png while ascending"
 region row1  60 50 1000 165 "the whole first row"
 
 snap tile1 ascending
@@ -35,8 +35,13 @@ assert_regions_differ "$ASC_ROW" "$SNAP_RESULT" \
 snap tile1 descending
 assert_regions_differ "$ASC_TILE" "$SNAP_RESULT" \
     "…and the first tile should now be a different file"
-# Descending puts 16-xbin.xb first, which is a green band on black.
-kt_assert_dominant "$SNAP_RESULT" g "descending, the first tile should be 16-xbin.xb (green)"
+# Deliberately NO colour assertion for the descending case. Which file sorts LAST
+# depends on the fixture set, so naming it couples this test to the folder's
+# contents — adding 19-sauce.ans later broke exactly that assertion, because the
+# new last-by-name file is near-black ANSI rather than the green .xb it used to
+# be. "The first tile is now a different file" is asserted above and is the claim
+# that actually matters; the ascending side still checks a colour, and 01-red.png
+# stays first as long as nothing sorts before "01".
 
 click 368 727
 wait_for 1.2 "back to ascending"

@@ -18,7 +18,7 @@ kt_goto "$_KT_NAV"
 region grid  60 50 700 170 "the tiles"
 region one   70 70 120 100 "the archive's first member once mounted"
 region two  230 70 120 100 "…and its second"
-region blank 70 420 120 100 "empty background, tile-sized"
+region blank 70 570 120 100 "empty background BELOW the last grid row. y=570, not 420: the folder grew to three rows and the old reference sat on a tile, tile-sized"
 
 snap grid outside
 OUTSIDE="$SNAP_RESULT"

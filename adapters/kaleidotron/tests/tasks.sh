@@ -1,0 +1,64 @@
+#!/bin/bash
+# tasks.sh — a project's .vscode/tasks.json is discovered, run, and reported.
+#
+# The parsing side is thoroughly unit tested (JSONC, platform blocks, variable
+# substitution, dependency ordering). What no in-process test covers is the loop
+# a person actually uses: that a tasks.json sitting beside the files makes a
+# "▶ Run" menu APPEAR, that choosing an entry spawns it, and that its output is
+# streamed into a panel — including that a failure is reported as one rather than
+# silently swallowed.
+#
+# The fixture tasks.json is JSONC with a trailing comma on purpose: real
+# hand-edited files have both, and `serde_json` rejects both, so the strip has to
+# be exercised by a real file and not only by a unit fixture.
+#
+#   ▶ Run (700,61) → "QA: Say hello" (724,99) · "QA: Fail on purpose" (742,142)
+
+info "=== kaleidotron: project tasks are discovered, run and reported ==="
+
+# A separate folder, because a discovered tasks.json adds a "▶ Tasks" entry to
+# the top of every file context menu — which shifts every other entry down and
+# breaks the calibrated coordinates in `fileops` and `compare`. Only this folder
+# carries one.
+park_mouse
+kt_goto "$_KT_TASKS"
+wait_for 1.0 "in the tasks fixture folder"
+click 130 122
+wait_for 1.5 "09-code.bas opens in the text viewer"
+
+region toolbar 640 50 200 26  "the right end of the toolbar, where ▶ Run appears"
+region panel    60 540 1000 170 "the bottom output panel"
+
+snap panel no_panel
+NO_PANEL="$SNAP_RESULT"
+
+# The Run menu only exists because a tasks.json was found by walking up from the
+# browsed folder — so opening it at all is the discovery assertion.
+click 700 61
+wait_for 1.0 "Run menu open"
+snap toolbar menu_open
+MENU="$SNAP_RESULT"
+
+kt_click_raw 724 99
+wait_for 2.5 "QA: Say hello ran"
+park_mouse
+
+snap panel ran
+assert_regions_differ "$NO_PANEL" "$SNAP_RESULT" \
+    "running a task should open the output panel and stream its output"
+RAN="$SNAP_RESULT"
+
+# A failing task must look different from a successful one — the panel reports
+# the exit status, so "it ran" and "it worked" are not the same claim.
+click 700 61
+wait_for 1.0 "Run menu open again"
+kt_click_raw 742 142
+wait_for 2.5 "QA: Fail on purpose ran and exited 3"
+park_mouse
+
+snap panel failed
+assert_regions_differ "$RAN" "$SNAP_RESULT" \
+    "a failing task should report differently from a successful one"
+
+assert_window_exists
+info "=== tasks test done ==="
