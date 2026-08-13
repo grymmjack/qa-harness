@@ -27,6 +27,10 @@ click() {
 # right_click X Y
 right_click() { click "$1" "$2" 3; }
 
+# middle_click X Y — middle mouse button (X11/xdotool button 2). Panels use MMB
+# for alternate actions (e.g. DRAW: palette-ops delete/insert, custom-font load).
+middle_click() { click "$1" "$2" 2; }
+
 # double_click X Y
 double_click() {
     local ax ay
