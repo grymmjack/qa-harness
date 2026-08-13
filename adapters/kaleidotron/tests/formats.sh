@@ -18,9 +18,13 @@
 
 info "=== kaleidotron: every format paints a distinct thumbnail ==="
 
-# .bas is gated behind the source-code plugin, which the blessed settings.json
-# enables — but the CLI folder was scanned before settings applied, so re-scan.
-kt_refresh
+# NO refresh here, deliberately. The .bas fixture is gated behind the source-code
+# plugin, which the blessed settings.json enables — and it must be listed on the
+# FIRST frame. kaleidotron used to read settings.json only after scanning the
+# launch folder, so a plugin enabled in that file silently did nothing until the
+# user pressed F5 or navigated. The `bas` assertion below is what pins the fix:
+# if the ordering regresses, that tile is blank and this test fails.
+#
 # Any hover leaves a highlight (and, in the table, a tooltip) inside a region, so
 # every baseline here is taken with the pointer parked off the content.
 park_mouse

@@ -30,7 +30,6 @@
 
 info "=== kaleidotron: ANSI art renders; the CRT toggles change the blit ==="
 
-kt_refresh
 park_mouse
 
 # 08-art.ans is row 2, position 2 → tile centre (290, 290).

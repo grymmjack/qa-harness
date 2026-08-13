@@ -75,6 +75,18 @@ Verified: after a run, `/tmp/kaleidotron-qa-home/data/kaleidotron/` holds the
 `settings.json` / `views.db` / `keybindings.json` the run produced, and the real
 `~/.local/share/kaleidotron` is untouched.
 
+**The XDG dirs are not the only place this app writes.** A star rating on an
+on-disk file is stored as a `user.baloo.rating` **xattr on that file** (the
+KDE/Baloo scheme, so ratings interoperate with Gwenview). So `rating.sh` was
+writing ratings onto the fixtures *in the repository*, where they survived every
+sandbox wipe — later runs started from a pre-rated tile, and a stray keypress in
+an early draft of `viewer.sh` (where `1`–`5` set ratings, not zoom) left a
+permanent star on `01-red.png`. `adapter_ensure_config` therefore copies the
+fixtures into the sandbox and the app is pointed at the **copy**, with
+`--no-preserve=xattr` so a stale rating cannot resurrect itself. Isolating an
+app's config dirs is not isolation if its state model includes the files it
+browses.
+
 ## Calibration notes for new tests
 
 Against the default 1100×760 window:
@@ -94,11 +106,13 @@ Three moving parts to design around rather than wait out:
   check (top-right). The git badge depends on whether the fixtures are committed,
   so tiles are only ever compared against a baseline taken **in the same run**,
   never a stored golden.
-- **Format plugins default OFF** (source code, PDF, audio, 3D, video), and the
-  initial folder scan happens *before* `settings.json` is applied — so a fresh
-  sandbox lists only ordinary images on the first frame — even though the blessed
-  settings.json turns the source-code plugin on. Any test touching a plugin-gated
-  format must call `kt_refresh` (F5) first; the adapter provides it.
+- **Format plugins default OFF** (source code, PDF, audio, 3D, video), so the
+  blessed `settings.json` turns the source-code one on for the `.bas` fixture.
+  This used to need an F5 as well — the app scanned the launch folder before
+  reading `settings.json`, so the plugin had no effect on the first listing.
+  That was **fixed upstream** after this suite surfaced it; `formats.sh` now
+  asserts the `.bas` tile paints on the first frame, and reverting the fix makes
+  exactly that one assertion fail.
 
 ### Calibrating offscreen — `calibrate.sh`
 

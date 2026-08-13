@@ -9,7 +9,6 @@
 
 info "=== kaleidotron: the table view paints rows ==="
 
-kt_refresh
 park_mouse
 
 region body 60 50 1000 300 "where the tiles are in grid mode, and rows in table mode"

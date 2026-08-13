@@ -18,7 +18,6 @@
 
 info "=== kaleidotron: CP437 source renders as art and opens as text ==="
 
-kt_refresh
 park_mouse
 
 # 09-code.bas is row 2, position 3 → tile centre (450, 290).

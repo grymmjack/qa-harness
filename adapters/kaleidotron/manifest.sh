@@ -24,7 +24,7 @@ _KT_BIN="$_KT_ROOT/target/release/kaleidotron"
 # this is a PREFIX match. xdotool --name takes a regex and matches substrings,
 # which is what we want: the path changes as tests navigate.
 _KT_TITLE="kaleidotron"
-_KT_FIXTURES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fixtures"
+_KT_FIXTURES_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fixtures"
 
 # The app's default window size (src/main.rs), and therefore the coordinate space
 # every test writes against. Exported so tests can centre things without
@@ -75,7 +75,28 @@ adapter_ensure_config() {
   "viewer":  { "osd_enabled": false }
 }
 JSON
+
+    # The FIXTURES are copied into the sandbox too, and the app is pointed at the
+    # copy — the XDG dirs are not the only place this app writes.
+    #
+    # A star rating on an on-disk file is stored as a `user.baloo.rating` XATTR on
+    # that file (the KDE/Baloo scheme, so it interoperates with Gwenview). So a
+    # run of the rating test wrote a rating onto the fixture in the repository,
+    # where it survived the sandbox wipe: later runs then started from a
+    # pre-rated tile, and a stray keypress in an early draft of the viewer test
+    # left a permanent 1-star on 01-red.png. Isolating the XDG dirs is not enough
+    # when the app's state model includes the files themselves.
+    #
+    # Copying also means a test may freely rename, trash or create files.
+    rm -rf "$_KT_FIXTURES"
+    mkdir -p "$_KT_FIXTURES"
+    # -L dereferences, --no-preserve=xattr drops any rating that leaked onto the
+    # source before this was fixed, so a stale xattr cannot resurrect itself.
+    cp -L --no-preserve=xattr "$_KT_FIXTURES_SRC"/* "$_KT_FIXTURES"/ 2>/dev/null || true
 }
+
+# Where the app is actually pointed: a throwaway copy, never the repo's originals.
+_KT_FIXTURES="$_KT_SANDBOX/fixtures"
 
 # ── 3. Launch / quit ─────────────────────────────────────────────────────────
 adapter_launch() {
@@ -147,19 +168,18 @@ adapter_to_screen() {
 # lesson in ARCHITECTURE.md. Keep the alias even if no test uses it yet.
 _kt_abs() { adapter_to_screen "$@"; }
 
-# ── 5b. kt_refresh — make settings.json actually apply to the listing ────────
-# An app-shaped quirk a test cannot guess: kaleidotron opens the CLI `--folder`
-# during construction, and applies settings.json AFTERWARDS. So on the first
-# frame the folder was scanned with the DEFAULT plugin flags — source files are
-# missing and git badges are drawn — even though settings.json says otherwise.
-# F5 re-scans, this time with settings applied.
+# ── 5b. kt_refresh — re-scan the current folder from disk ───────────────────
+# F5. No longer needed to make settings.json apply: kaleidotron used to scan the
+# launch folder BEFORE reading settings.json, so a plugin enabled in that file
+# left its formats missing from the grid until the user refreshed. The QA suite
+# hit that immediately and it was fixed upstream — the listing now honours
+# settings.json on the first frame, which `formats.sh` asserts directly.
 #
-# Any test that touches a plugin-gated format (.bas and friends) or cares about
-# badge-free tiles must call this first. Tests using only ordinary images do not
-# need it, and skip the second of wall clock.
+# Kept for what it is actually for: a test that changes something on disk and
+# needs the listing to catch up.
 kt_refresh() {
     key F5
-    wait_for 1.0 "re-scan with settings.json applied"
+    wait_for 1.0 "re-scan the folder from disk"
 }
 
 # ── 5c. kt_hover — move the pointer without clicking ────────────────────────
