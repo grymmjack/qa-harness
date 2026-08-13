@@ -88,15 +88,25 @@ JSON
     # when the app's state model includes the files themselves.
     #
     # Copying also means a test may freely rename, trash or create files.
-    rm -rf "$_KT_FIXTURES"
-    mkdir -p "$_KT_FIXTURES"
+    rm -rf "$_KT_FIXTURES" "$_KT_NAV"
+    mkdir -p "$_KT_FIXTURES" "$_KT_NAV"
     # -L dereferences, --no-preserve=xattr drops any rating that leaked onto the
     # source before this was fixed, so a stale xattr cannot resurrect itself.
     cp -L --no-preserve=xattr "$_KT_FIXTURES_SRC"/* "$_KT_FIXTURES"/ 2>/dev/null || true
+    cp -RL --no-preserve=xattr "$_KT_NAV_SRC"/* "$_KT_NAV"/ 2>/dev/null || true
 }
 
 # Where the app is actually pointed: a throwaway copy, never the repo's originals.
 _KT_FIXTURES="$_KT_SANDBOX/fixtures"
+
+# A SECOND fixture set, holding the things a navigation test needs: a subfolder
+# and an archive. Kept out of the main folder on purpose — folders and archives
+# sort FIRST (dirs-first is on by default and lives in eframe storage, not
+# settings.json, so it cannot be pinned from the blessed config), so putting them
+# beside the images would shift every tile and invalidate the coordinates in all
+# the other tests. Tests reach it with `kt_goto`.
+_KT_NAV_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fixtures-nav"
+_KT_NAV="$_KT_SANDBOX/fixtures-nav"
 
 # ── 3. Launch / quit ─────────────────────────────────────────────────────────
 adapter_launch() {
@@ -194,6 +204,92 @@ kt_hover() {
     read -r sx sy <<< "$(adapter_to_screen "$1" "$2")"
     driver_input_move "$sx" "$sy"
     sleep 0.1
+}
+
+# ── 5d. kt_goto — navigate to an absolute path via the breadcrumb path editor ─
+# The ✎ button at the left of the breadcrumb bar swaps it for a text field. This
+# is how a test reaches a folder that is not reachable by clicking a tile — the
+# navigation fixtures live outside the browsed folder precisely so they cannot
+# disturb its layout.
+kt_goto() {
+    click 69 33
+    wait_for 0.4 "path editor open"
+    # The field opens PRE-FILLED with the current folder and focused, so typing
+    # appends to it and Enter then navigates to a path that does not exist —
+    # silently leaving the app exactly where it was. Select-all first so the typed
+    # path replaces rather than extends it.
+    key ctrl+a
+    type_text "$1"
+    key Return
+    wait_for 1.5 "navigated to $1"
+}
+
+# ── 5d2. kt_mouse_nav — the back/forward thumb buttons ──────────────────────
+# The core's input verbs cover buttons 1-3 (left/middle/right); the browser-style
+# side buttons are 8 and 9 and have no verb, so this is another `_abs`-pattern
+# drop to a raw driver call. kaleidotron binds them to its folder history.
+# ── 5d3. kt_ctrl_wheel — a modifier held ACROSS a wheel gesture ─────────────
+# Ctrl+wheel is kaleidotron's thumbnail-size zoom, and it cannot be assembled
+# from the core verbs. Two reasons, both learned by getting it wrong:
+#   * `scroll_up` takes LOGICAL COORDS (x y), not a tick count — `scroll_up 4`
+#     silently scrolls at x=4 rather than four notches;
+#   * every core input verb calls `adapter_pre_input` first, which focuses the
+#     window, and that drops a modifier held by a separate `xdotool keydown`.
+# So the whole gesture goes to xdotool in ONE invocation, with nothing in between
+# to disturb the held key.
+#
+# This also exercises something a mocked input could not: egui pre-classifies
+# Ctrl+wheel as a ZOOM event, so it never appears in the scroll deltas at all.
+kt_ctrl_wheel() {   # x y up|down [ticks]
+    local lx=$1 ly=$2 dir=$3 ticks=${4:-3} sx sy btn args=()
+    read -r sx sy <<< "$(adapter_to_screen "$lx" "$ly")"
+    [[ "$dir" == up ]] && btn=4 || btn=5
+    adapter_focus
+    args=(mousemove "$sx" "$sy" keydown ctrl)
+    while (( ticks-- > 0 )); do args+=(click "$btn"); done
+    args+=(keyup ctrl)
+    xdotool "${args[@]}"
+    sleep 0.3
+}
+
+kt_mouse_back()    { xdotool click 8; sleep 0.2; }
+kt_mouse_forward() { xdotool click 9; sleep 0.2; }
+
+# ── 5e. kt_assert_dominant — assert which channel a region is mostly made of ──
+# The core asserts that two regions DIFFER; it has no vocabulary for what a
+# region actually looks like. Some claims need that: the binary text-mode
+# formats store raw VGA attribute bytes, where 4 is RED — but 4 is BLUE in the
+# ANSI SGR ordering used by .ans, and mixing the two silently swaps red and blue
+# across a whole piece (the historical MULTI-13.BIN bug). "It changed" cannot
+# catch that; "it is red" can.
+#
+# Averages the region to a single pixel and compares channels. Reports through
+# the core's pass/fail so it lands in the run's tally like any other assertion.
+kt_assert_dominant() {
+    local png=$1 want=$2 msg=$3 margin=${4:-12} r g b got hi lo
+    read -r r g b < <(magick "$png" -resize 1x1\! -format '%[fx:int(255*r)] %[fx:int(255*g)] %[fx:int(255*b)]' info: 2>/dev/null)
+    [[ -z "${r:-}" ]] && { fail "$msg — could not read the region's colour"; return 1; }
+    if   (( r >= g && r >= b )); then got=r; hi=$r
+    elif (( g >= r && g >= b )); then got=g; hi=$g
+    else got=b; hi=$b
+    fi
+    lo=$r; (( g < lo )) && lo=$g; (( b < lo )) && lo=$b
+    # A near-grey region has no dominant channel, and the comparison above would
+    # pick one anyway on a rounding difference. This is not pedantry: a thumbnail
+    # that has not decoded yet paints a grey SPINNER, which is emphatically "not
+    # blank" — so a plain differs-from-blank check passes on a tile that never
+    # rendered. Two of these fixtures span forever and were passing exactly that
+    # way, which is how a real decoder bug (.tga has no magic bytes, so it could
+    # never decode at all) sat here unnoticed.
+    if (( hi - lo < margin )); then
+        fail "$msg — region is near-grey (rgb ${r},${g},${b}), which is what an undecoded, still-spinning tile looks like"
+        return 1
+    fi
+    if [[ "$got" == "$want" ]]; then
+        pass "$msg (mean rgb ${r},${g},${b} — ${want} dominates)"
+    else
+        fail "$msg — expected ${want} to dominate, got ${got} (mean rgb ${r},${g},${b})"
+    fi
 }
 
 # ── 6. Lifecycle hooks ───────────────────────────────────────────────────────
