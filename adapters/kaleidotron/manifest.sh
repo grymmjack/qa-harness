@@ -50,6 +50,31 @@ ADAPTER_CONFIG="$_KT_SANDBOX"
 adapter_ensure_config() {
     rm -rf "$_KT_SANDBOX"
     mkdir -p "$_KT_SANDBOX"/{config,data,cache}
+    mkdir -p "$_KT_SANDBOX/data/kaleidotron"
+    # The blessed config. Only three things are pinned, and each removes a source
+    # of drift rather than expressing a preference:
+    #
+    #   plugin_code   ON  — source/text is a format PLUGIN and ships OFF, so .bas
+    #                       fixtures would not even be listed. Tests that need it
+    #                       must still call kt_refresh (see below).
+    #   git_enabled   OFF — the fixtures live inside a git repo, so tiles would
+    #                       carry a git badge whose colour depends on whether the
+    #                       fixtures happen to be committed.
+    #   osd_enabled   OFF — the metadata OSD fades in over the viewer for several
+    #                       seconds after every open. A fading overlay under a
+    #                       region diff is a race, and turning it off is far more
+    #                       robust than timing around it.
+    #
+    # Deliberately NOT pinned: thumb_size, ui_zoom, theme. They are already at
+    # their defaults in a wiped sandbox, and setting thumb_size in particular
+    # RESIZES EVERY TILE and invalidates every calibrated coordinate in the suite.
+    cat > "$_KT_SANDBOX/data/kaleidotron/settings.json" <<'JSON'
+{
+  "plugins": { "plugin_code": true },
+  "paths":   { "git_enabled": false },
+  "viewer":  { "osd_enabled": false }
+}
+JSON
 }
 
 # ── 3. Launch / quit ─────────────────────────────────────────────────────────
@@ -61,6 +86,16 @@ adapter_launch() {
     }
     # HOME as well as the XDG vars: `directories` falls back to $HOME when an XDG
     # var is unset, and some paths (rfd dialogs, ~/.config) read HOME directly.
+    #
+    # WAYLAND_DISPLAY is unset whenever we are targeting an X display. kaleidotron
+    # is winit, and winit PREFERS WAYLAND whenever WAYLAND_DISPLAY is set: it will
+    # ignore DISPLAY and open a real window on the developer's actual compositor,
+    # while every xdotool search against the X display finds nothing. The driver's
+    # offscreen wrapper already unsets it, so this is belt-and-braces for anyone
+    # invoking the adapter outside that wrapper — but it is the difference between
+    # "invisible" and "a window appears on someone's screen mid-run", so it is
+    # asserted here too rather than assumed of the caller.
+    env -u WAYLAND_DISPLAY \
     HOME="$_KT_SANDBOX" \
     XDG_CONFIG_HOME="$_KT_SANDBOX/config" \
     XDG_DATA_HOME="$_KT_SANDBOX/data" \
@@ -111,6 +146,35 @@ adapter_to_screen() {
 # Tests that drop to raw driver calls use this name directly — see the `_abs`
 # lesson in ARCHITECTURE.md. Keep the alias even if no test uses it yet.
 _kt_abs() { adapter_to_screen "$@"; }
+
+# ── 5b. kt_refresh — make settings.json actually apply to the listing ────────
+# An app-shaped quirk a test cannot guess: kaleidotron opens the CLI `--folder`
+# during construction, and applies settings.json AFTERWARDS. So on the first
+# frame the folder was scanned with the DEFAULT plugin flags — source files are
+# missing and git badges are drawn — even though settings.json says otherwise.
+# F5 re-scans, this time with settings applied.
+#
+# Any test that touches a plugin-gated format (.bas and friends) or cares about
+# badge-free tiles must call this first. Tests using only ordinary images do not
+# need it, and skip the second of wall clock.
+kt_refresh() {
+    key F5
+    wait_for 1.0 "re-scan with settings.json applied"
+}
+
+# ── 5c. kt_hover — move the pointer without clicking ────────────────────────
+# The core's input verbs all click, drag or type; there is no "just hover". But
+# hover IS behaviour in this app — the grid rates the tile under the cursor, and
+# a hovered tile highlights and can start playing an animation — so a test needs
+# to place the pointer and assert on the result. This is the `_abs` pattern from
+# ARCHITECTURE.md: a test dropping to a raw driver call gets its screen coords
+# from the adapter's own logical->screen helper, by name.
+kt_hover() {
+    local sx sy
+    read -r sx sy <<< "$(adapter_to_screen "$1" "$2")"
+    driver_input_move "$sx" "$sy"
+    sleep 0.1
+}
 
 # ── 6. Lifecycle hooks ───────────────────────────────────────────────────────
 _kt_wid() { xdotool search --pid "${ADAPTER_PID:-0}" --name "$_KT_TITLE" 2>/dev/null | head -1; }

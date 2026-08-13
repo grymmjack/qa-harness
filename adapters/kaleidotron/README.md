@@ -10,6 +10,34 @@ cd ~/git/kaleidotron && cargo build --release     # once
 cd ~/git/qa-harness  && bin/qa --adapter adapters/kaleidotron   # offscreen by default
 ```
 
+## What these tests are for
+
+They **extend** kaleidotron's own `cargo test`, they don't repeat it. The 390
+in-process tests cover pure logic — decoders, palettes, sorting, ratings, SAUCE,
+the RIP rasteriser, CP437 round-trips — and the `egui_kittest` GUI tests drive
+menus and dialogs through AccessKit. But kaleidotron's own notes are explicit
+that **custom-painted grid tiles carry no accessibility label, so kittest covers
+the chrome, not the tiles**.
+
+That gap is this suite's whole remit: **anything painted**. A format can regress
+to a blank tile, a placeholder, or another decoder's output with every unit test
+still green. A zoom can update its state and never redraw. A display-only
+transform like CRT aspect changes no readable state at all. Each test below
+asserts on pixels for something no in-process test can observe.
+
+## Tests
+
+| test | what it proves that a unit test cannot |
+|---|---|
+| `grid.sh` | tiles render; a click opens the viewer; Escape returns to the same grid |
+| `formats.sh` | six decoder families each paint a **distinct, non-blank** tile — the decode → texture → paint chain, per format |
+| `viewer.sh` | the viewer really repaints on fit/zoom, and 1:1 after fit restores the **exact** pixels (integer device-pixel snapping) |
+| `textmode.sh` | ANSI art renders; the navigator minimap paints; CRT aspect restretches the blit; the 9-dot VGA cell re-decodes wider |
+| `code_view.sh` | a CP437 `.bas` rasterises as art **and** opens as text, and the two readings differ — guards three paint-time bugs that shipped |
+| `table.sh` | the hand-rolled table paints rows with thumbnails, and toggling back restores the grid |
+| `chrome.sh` | docks resize the central panel; F11 immersive hides and restores the chrome |
+| `rating.sh` | a star rating paints in the caption, on the **hovered** tile rather than the first one |
+
 ## What this adapter has to say about the app
 
 | Fact | Value |
@@ -68,9 +96,43 @@ Three moving parts to design around rather than wait out:
   never a stored golden.
 - **Format plugins default OFF** (source code, PDF, audio, 3D, video), and the
   initial folder scan happens *before* `settings.json` is applied — so a fresh
-  sandbox lists only ordinary images on the first frame. The fixtures are PNGs
-  for exactly this reason. A test that needs another type must enable the plugin
-  and re-scan (F5).
+  sandbox lists only ordinary images on the first frame — even though the blessed
+  settings.json turns the source-code plugin on. Any test touching a plugin-gated
+  format must call `kt_refresh` (F5) first; the adapter provides it.
+
+### Calibrating offscreen — `calibrate.sh`
+
+Writing a region test means knowing where things are, and the obvious way to find
+out takes over the developer's screen. `./calibrate.sh out.png ['xdotool cmd'…]`
+launches the app inside its own Xvfb + openbox, optionally drives it, and writes
+a PNG to look at. Coordinates in `mousemove` are window-relative, like a test's.
+
+```sh
+./calibrate.sh /tmp/x.png 'key F5' 'sleep 1' 'mousemove 290 290' 'click 1' 'sleep 1.5'
+CAL_SETTINGS=/tmp/blessed.json ./calibrate.sh /tmp/x.png     # with a chosen app config
+```
+
+**`env -u WAYLAND_DISPLAY` is load-bearing, not hygiene.** kaleidotron is winit,
+and winit prefers Wayland whenever `WAYLAND_DISPLAY` is set — it will ignore
+`DISPLAY` entirely and open a real window on the developer's actual compositor,
+while every xdotool search against the Xvfb display finds nothing and the script
+reports "window never appeared". Both `calibrate.sh` and `adapter_launch` unset
+it. The driver's offscreen wrapper does too; the adapter asserts it anyway,
+because the failure mode is a window appearing on someone's screen mid-run.
+
+### Two app behaviours that will bite a new test
+
+**Text-mode art auto-plays.** An `.ans` opens in the baud-rate player (4800 by
+default) and types itself out, auto-scrolling to follow the cursor. Any snap
+taken during that races an animation. `Home` interrupts playback *and* scrolls to
+the top, giving one settled frame — `textmode.sh` does this before its baseline.
+
+**"CRT" in the status bar is a menu, not a toggle**, and clicking a switch inside
+it *closes the popup*. So each toggle is open-then-click; adding a dismiss step
+re-opens the menu and the next click closes it instead of toggling. `Escape` is
+not a dismiss either — it leaves the **viewer**. Two separate versions of
+`textmode.sh` failed on this, both with the tell-tale signature of two different
+actions producing byte-identical results.
 
 **Compare regions of the same size.** `compare` diffs only the overlap of two
 differently-sized images, so a mismatched pair reports a small, meaningless count
@@ -80,16 +142,13 @@ folder; it now pairs `tile1` with an equally-sized `emptyref` patch of
 background. Prove a guard fails when it should — `mv fixtures /tmp/hold; mkdir
 fixtures` and re-run — before trusting it.
 
-## Tests
-
-- `grid.sh` — the fixtures render, clicking a tile opens it in the viewer, and
-  Escape returns to the grid the file was opened from.
-
 ## Fixtures
 
-`fixtures/` holds four 128×128 PNGs in flat colours with distinct shapes, so
-thumbnails are unambiguous at grid size and diffs are large and obvious.
-Regenerate with:
+`fixtures/` holds one file per decoder family, chosen so each paints something
+unmistakably different: flat-colour PNGs with distinct shapes, a transparent PNG
+(which draws over the checkerboard backdrop), an animated GIF, an indexed PCX
+(the hand-written palette-preserving decoder), CP437 ANSI art, and a `.bas` whose
+comment banner is box-drawing. Regenerate the PNGs with:
 
 ```sh
 magick -size 128x128 xc:'#cc2222' -fill white -draw 'circle 64,64 64,20'          01-red.png
