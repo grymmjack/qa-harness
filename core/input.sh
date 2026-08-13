@@ -59,6 +59,40 @@ drag() {
     sleep 0.1
 }
 
+# hover X Y — move the pointer to a logical point WITHOUT clicking. For hover,
+# z-order and cursor tests (e.g. "is the cursor drawn on top of the floating
+# window under the pointer"). Unlike park_mouse (a fixed inert spot), this targets
+# an arbitrary logical coordinate.
+hover() {
+    local x=$1 y=$2 ax ay
+    _qa_pre_input
+    read -r ax ay <<< "$(adapter_to_screen "$x" "$y")"
+    dbg "hover vp=($x,$y) abs=($ax,$ay)"
+    driver_input_move "$ax" "$ay"
+    sleep 0.05
+}
+
+# mouse_down X Y [button=1] / mouse_up [button=1] — split press / release for
+# multi-step gestures the atomic click()/drag() can't express: hold a button, do
+# something (move, tap a key), then release. The press carries a 1px motion so
+# SDL2 registers a real button-with-motion event (same reason drag() does).
+mouse_down() {
+    local x=$1 y=$2 btn=${3:-1} ax ay
+    _qa_pre_input
+    read -r ax ay <<< "$(adapter_to_screen "$x" "$y")"
+    dbg "mouse_down vp=($x,$y) abs=($ax,$ay) btn=$btn"
+    driver_input_move "$ax" "$ay"
+    sleep 0.06
+    driver_input_button_move down "$btn" $(( ax + 1 )) "$ay"
+    sleep 0.05
+}
+mouse_up() {
+    local btn=${1:-1}
+    dbg "mouse_up btn=$btn"
+    driver_input_button up "$btn"
+    sleep 0.08
+}
+
 # scroll_up / scroll_down at logical-pixel coords
 scroll_up() {
     local ax ay; read -r ax ay <<< "$(adapter_to_screen "$1" "$2")"
