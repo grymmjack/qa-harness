@@ -170,14 +170,30 @@ driver_offscreen_available() { command -v xvfb-run &>/dev/null && command -v Xvf
 # screen needs the right res). Ported from draw-qa.sh's Xvfb self-wrap.
 #
 # A lightweight window manager (openbox) is started INSIDE the Xvfb session when
-# available. Bare Xvfb has no WM, so a dying app window is not reaped promptly and
-# input focus is never assigned — which breaks any test that quits+relaunches the
-# app mid-file: the relaunch binds the previous instance's still-mapped window
-# (apps like SDL2/QB64-PE set no _NET_WM_PID, so xdotool can't tell two same-title
-# windows apart). With a WM the old window is torn down and focus follows the new
-# one, so offscreen matches onscreen. The bundled openbox-rc.xml undecorates every
-# window so geometry is pixel-identical to the no-WM case. Disable with
-# QA_OFFSCREEN_WM=none; the harness still works, minus mid-relaunch reliability.
+# available. This is HARNESS-WIDE, not per-app: it lives in the driver because a
+# WM is an OS/environment concern shared by every adapter. Bare Xvfb has no WM, so
+# a dying app window is not reaped promptly and input focus is never assigned —
+# which breaks any test that quits+relaunches the app mid-file: the relaunch binds
+# the previous instance's still-mapped window (apps like SDL2/QB64-PE set no
+# _NET_WM_PID, so xdotool can't tell two same-title windows apart). With a WM the
+# old window is torn down and focus follows the new one, so offscreen matches
+# onscreen (the default — a real desktop always has a WM).
+#
+# Knobs (env):
+#   QA_OFFSCREEN_WM=none         disable the WM entirely (bare Xvfb, the old
+#                                behaviour) — the harness still runs, minus
+#                                mid-relaunch reliability.
+#   QA_OFFSCREEN_WM=<name>       use a different WM binary (e.g. blackbox, twm).
+#                                It is invoked as `<name> --sm-disable [--config-
+#                                file <rc>]`; a WM that doesn't take those flags
+#                                needs its own launch tweak here.
+#   QA_OFFSCREEN_WM_RC=<file>    override the openbox config. The bundled
+#                                openbox-rc.xml UNDECORATES every window so region
+#                                geometry is pixel-identical to bare Xvfb — the
+#                                right default for exact region-diffing. An adapter
+#                                that WANTS real title bars / decorations (to test
+#                                them) points this at its own rc. Only consumed by
+#                                openbox-compatible WMs.
 driver_run_offscreen() {
     local res="${QA_XVFB_RES:-}"
     if [[ -z "$res" ]]; then
@@ -185,7 +201,8 @@ driver_run_offscreen() {
         [[ -z "$res" ]] && res="1920x1080"
     fi
     local wm="${QA_OFFSCREEN_WM:-openbox}"
-    local rc="${BASH_SOURCE%/*}/openbox-rc.xml"
+    # Respect a caller-supplied rc; otherwise use the bundled undecorated one.
+    local rc="${QA_OFFSCREEN_WM_RC:-${BASH_SOURCE%/*}/openbox-rc.xml}"
     export QA_OFFSCREEN_WM="$wm" QA_OFFSCREEN_WM_RC="$rc"
     # Start the WM inside the just-created Xvfb, then exec the real command in the
     # same X server. $DISPLAY is set by xvfb-run before this inner shell runs.
