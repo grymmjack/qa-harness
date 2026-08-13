@@ -216,3 +216,32 @@ failing "action had no effect."
   `adapter_pre_input` wake; a WM-less Xvfb sets no input focus, so the adapter must
   focus the window (`windowfocus --sync`) before input — SDL2 apps self-focus,
   plain X11/minifb windows do not.
+
+## Testing z-order & hit-targets
+
+Two independent things must agree for a GUI to feel non-brittle, and they drift
+apart constantly: what renders **on top** (visual z-order) and what wins a **click**
+(input z-order / hit-target). The harness has generic guards for both — reusable
+across any app, so keep them here, not in an adapter.
+
+**Cursor / overlay on top (render z-order).** `assert_cursor_on_top X Y` snaps a
+small box at (X,Y) with the pointer parked away (baseline), hovers onto (X,Y), and
+snaps again; the cursor must change those pixels. Unchanged ⇒ the cursor is drawn
+*under* whatever is there — the "cursor buried beneath a floating window" bug.
+Point it at any overlap: a floating window over a panel, a popup over the canvas.
+
+**Front-most wins the click (input z-order).** No single helper can know each
+window's response, so this is a recipe with the existing primitives: position two
+overlapping surfaces, `click` a point inside the overlap, then assert the FRONT
+surface's expected change happened (`assert_regions_differ`) **and** the BACK
+surface's did not (`assert_regions_same`). If the back one reacted, hit-testing
+disagrees with paint order.
+
+**No double-fire.** Non-`ELSEIF` sibling handlers over overlapping rects can both
+run on one click. Test it: `click` the overlap once, assert exactly one surface
+changed. Two changes ⇒ a double-fire seam.
+
+The building blocks (`hover`, `mouse_down`/`mouse_up`, `with_mods` for modifier+mouse,
+`middle_click`, `scroll_*`) plus `snap_region` + `assert_regions_differ/same` express
+every mixed mouse/keyboard gesture and every z-order/hit-target invariant without any
+app-specific code.

@@ -27,6 +27,10 @@ click() {
 # right_click X Y
 right_click() { click "$1" "$2" 3; }
 
+# middle_click X Y — middle mouse button (X11/xdotool button 2). Panels use MMB
+# for alternate actions (e.g. DRAW: palette-ops delete/insert, custom-font load).
+middle_click() { click "$1" "$2" 2; }
+
 # double_click X Y
 double_click() {
     local ax ay
@@ -59,6 +63,40 @@ drag() {
     sleep 0.1
 }
 
+# hover X Y — move the pointer to a logical point WITHOUT clicking. For hover,
+# z-order and cursor tests (e.g. "is the cursor drawn on top of the floating
+# window under the pointer"). Unlike park_mouse (a fixed inert spot), this targets
+# an arbitrary logical coordinate.
+hover() {
+    local x=$1 y=$2 ax ay
+    _qa_pre_input
+    read -r ax ay <<< "$(adapter_to_screen "$x" "$y")"
+    dbg "hover vp=($x,$y) abs=($ax,$ay)"
+    driver_input_move "$ax" "$ay"
+    sleep 0.05
+}
+
+# mouse_down X Y [button=1] / mouse_up [button=1] — split press / release for
+# multi-step gestures the atomic click()/drag() can't express: hold a button, do
+# something (move, tap a key), then release. The press carries a 1px motion so
+# SDL2 registers a real button-with-motion event (same reason drag() does).
+mouse_down() {
+    local x=$1 y=$2 btn=${3:-1} ax ay
+    _qa_pre_input
+    read -r ax ay <<< "$(adapter_to_screen "$x" "$y")"
+    dbg "mouse_down vp=($x,$y) abs=($ax,$ay) btn=$btn"
+    driver_input_move "$ax" "$ay"
+    sleep 0.06
+    driver_input_button_move down "$btn" $(( ax + 1 )) "$ay"
+    sleep 0.05
+}
+mouse_up() {
+    local btn=${1:-1}
+    dbg "mouse_up btn=$btn"
+    driver_input_button up "$btn"
+    sleep 0.08
+}
+
 # scroll_up / scroll_down at logical-pixel coords
 scroll_up() {
     local ax ay; read -r ax ay <<< "$(adapter_to_screen "$1" "$2")"
@@ -70,6 +108,39 @@ scroll_down() {
     _qa_pre_input; driver_input_move "$ax" "$ay"; sleep 0.05
     driver_input_scroll down 1; sleep 0.05
 }
+
+# with_mods "ctrl+shift" <gesture> [args…] — hold the named modifier keys DOWN,
+# run any pointer gesture (click / right_click / middle_click / drag / hover /
+# scroll_up / scroll_down / mouse_down …), then release the modifiers in reverse.
+# This is the "mixed WITH mouse input" primitive: any modifier combo can wrap any
+# gesture — Ctrl+click, Shift+drag, Alt+click, Ctrl+Shift+wheel. Modifier names:
+# ctrl shift alt super (xdotool names). Each is held with a beat so the app's
+# per-frame modifier poll registers it before the gesture fires.
+with_mods() {
+    local combo=$1; shift
+    local oldIFS=$IFS; IFS='+'; local -a _mods=($combo); IFS=$oldIFS
+    local m i rc
+    for m in "${_mods[@]}"; do driver_input_key_hold down "$m"; sleep 0.06; done
+    sleep 0.06
+    dbg "with_mods [$combo] $*"
+    "$@"; rc=$?
+    for (( i=${#_mods[@]}-1; i>=0; i-- )); do driver_input_key_hold up "${_mods[$i]}"; done
+    sleep 0.05
+    return $rc
+}
+# Convenience wrappers for the common single-modifier gestures.
+ctrl_click()  { with_mods ctrl        click "$@"; }
+shift_click() { with_mods shift       click "$@"; }
+alt_click()   { with_mods alt         click "$@"; }
+ctrl_shift_click() { with_mods ctrl+shift click "$@"; }
+shift_drag()  { with_mods shift       drag "$@"; }
+ctrl_drag()   { with_mods ctrl        drag "$@"; }
+alt_drag()    { with_mods alt         drag "$@"; }
+# Modifier + wheel (e.g. DRAW's Shift+wheel canvas pan). scroll_up/down take X Y.
+shift_scroll_up()   { with_mods shift scroll_up "$@"; }
+shift_scroll_down() { with_mods shift scroll_down "$@"; }
+ctrl_scroll_up()    { with_mods ctrl  scroll_up "$@"; }
+ctrl_scroll_down()  { with_mods ctrl  scroll_down "$@"; }
 
 # type text (printable chars only)
 type_text() {

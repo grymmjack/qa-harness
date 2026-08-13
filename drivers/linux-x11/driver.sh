@@ -96,6 +96,15 @@ driver_input_scroll() { # up|down [ticks]
     [[ "$1" == up ]] && b=4 || b=5
     while (( n-- > 0 )); do xdotool click "$b"; done
 }
+# Hold ONE key down, or release it — for modifier-held-during-mouse gestures
+# (Ctrl+click, Shift+drag, …). No --window: XTEST so SDL2 sees real physical key
+# state (SDL_GetKeyboardState / _KEYDOWN), same reason driver_input_key avoids it.
+driver_input_key_hold() { # down|up  <keyname e.g. ctrl shift alt super>
+    case "$1" in
+        down) xdotool keydown "$2" ;;
+        up)   xdotool keyup   "$2" ;;
+    esac
+}
 
 # ── capture (full display; core crops regions) ───────────────────────────────
 # Backend selection (learned the hard way — neither tool is right in both worlds):
