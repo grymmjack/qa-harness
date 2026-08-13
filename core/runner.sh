@@ -290,6 +290,30 @@ Env: QA_XVFB_RES=WxH  QA_PROJECT=name  QA_CAPTURE=tool  QA_RESULTS_DIR=dir
 HELP
 }
 
+# Remove ONLY dead runs' PNG frames from a shared screenshots dir. Snapshots and
+# FAIL frames embed the runner PID (…_<PID>.png / …-<PID>.png); a run already in
+# flight has that PID alive. An indiscriminate `rm *.png` at startup would delete a
+# concurrently-running run's in-flight frames — and the victim's asserts then fail
+# like app bugs ("regions identical", "could not read colour"), not like
+# interference. So keep any file whose embedded PID is still alive; delete the rest
+# (genuinely stale frames from finished/dead runs, plus non-PID cruft). This is the
+# per-run isolation that makes two adapters (or two of the same) run in parallel
+# safely off one shared dir; QA_RESULTS_DIR gives each run its own dir outright.
+_qa_clean_dead_snaps() {
+    local dir=$1 f base pid
+    [[ -d "$dir" ]] || return 0
+    shopt -s nullglob
+    for f in "$dir"/*.png; do
+        base=${f##*/}
+        pid=${base%.png}; pid=${pid##*[-_]}   # trailing …<sep><PID>.png
+        if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
+            continue   # a live run owns this frame — never touch it
+        fi
+        rm -f "$f" 2>/dev/null
+    done
+    shopt -u nullglob
+}
+
 # ── entrypoint ────────────────────────────────────────────────────────────────
 qa_main() {
     local -a QA_ARGS=("$@")
@@ -315,7 +339,7 @@ qa_main() {
     done
 
     mkdir -p "$RESULTS_DIR" "$SCREENSHOTS_DIR"
-    rm -f "$SCREENSHOTS_DIR"/*.png 2>/dev/null
+    _qa_clean_dead_snaps "$SCREENSHOTS_DIR"   # PID-scoped: never wipe a live run's frames
     [[ $CALIBRATE -eq 1 ]] && { mkdir -p "$CALIBRATE_DIR"; rm -f "$CALIBRATE_DIR"/*.png 2>/dev/null; }
     LOG_FILE="$RESULTS_DIR/run-$(date '+%Y%m%d-%H%M%S').log"
     RESULTS_TSV="${LOG_FILE%.log}.tsv"   # structured results paired with this run's log

@@ -66,6 +66,25 @@ bin/qa --adapter adapters/draw tests/smoke.sh   # one test, onscreen (warns firs
 bin/qa --adapter adapters/draw --status         # where is a running suite?
 ```
 
+### Running suites in parallel
+
+The core is concurrency-safe: `xvfb-run -a` auto-picks a free X display, and every
+snapshot/FAIL frame is PID-scoped (`…_<PID>.png`), so files never collide. The
+startup screenshot clean is also PID-scoped — it only removes frames whose run PID
+is dead, so a newcomer can never wipe an in-flight run's frames.
+
+For fully independent runs (separate results, logs, passed-cache, and per-app
+sandbox in one move), give each its own results dir:
+
+```bash
+QA_RESULTS_DIR=/tmp/runA bin/qa --adapter adapters/draw     --offscreen &
+QA_RESULTS_DIR=/tmp/runB bin/qa --adapter adapters/kaleidotron --offscreen &
+```
+
+One caveat is per-adapter, not core: an adapter that pins a fixed app-`HOME`/config
+path must derive it from `QA_RESULTS_DIR` (as the kaleidotron adapter does) or two
+runs of *that* app share one app sandbox.
+
 ## Adding an app (write an adapter)
 
 Copy `adapters/adapter.template.sh`, fill in six things: how to **launch/quit**,
