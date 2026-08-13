@@ -265,6 +265,24 @@ assert_regions_same() {
     fi
 }
 
+# ── z-order / hit-target assertions ───────────────────────────────────────────
+# assert_cursor_on_top X Y [MSG] — verify the app's pointer/cursor is drawn ON TOP
+# at logical (X,Y). Snap a small box there with the pointer parked away (baseline),
+# then hover onto (X,Y) and snap again: the cursor must change those pixels. If the
+# box is UNCHANGED, the cursor is being drawn UNDER whatever is at (X,Y) — the
+# classic "cursor buried beneath a floating window / overlay" z-order bug. This is
+# the generic guard for render-order-vs-input-order seams; point it at any
+# overlapping overlay (a floating window, a panel edge, a popup).
+assert_cursor_on_top() {
+    local x=$1 y=$2 msg=${3:-"cursor should render on top at ($x,$y)"} half=6
+    park_mouse
+    snap_region $(( x - half )) $(( y - half )) $(( half * 2 )) $(( half * 2 )) "curtop-base"
+    local base="$SNAP_RESULT"
+    hover "$x" "$y"
+    snap_region $(( x - half )) $(( y - half )) $(( half * 2 )) $(( half * 2 )) "curtop-cur"
+    assert_regions_differ "$base" "$SNAP_RESULT" "$msg"
+}
+
 # ── window / process assertions (delegate app specifics to adapter hooks) ─────
 # assert_window_title EXPECTED_SUBSTR
 assert_window_title() {
