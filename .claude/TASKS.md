@@ -15,10 +15,8 @@ code_view, table, chrome, rating, recolor, transparency, anim, selection, search
 
 _nothing in progress._
 
-**loop:off** — 21 of 22 done. The one remaining item is not workable: it needs a
-real `.rip` file, which does not exist in either repo and which I declined to
-fabricate. Everything else shipped (qa-harness#2, kaleidotron#93). Drop a genuine
-BBS `.rip` into `fixtures/` and that last item is about 20 lines.
+**loop:off** — all 22 done. The last item (`rip.sh`) was unblocked when Rick
+pointed at a real RIP corpus.
 
 ## Fixtures
 
@@ -32,7 +30,7 @@ BBS `.rip` into `fixtures/` and that last item is about 20 lines.
 
 ## Browsing / navigation
 
-- [ ] ⛔ **NOT DONE** · `rip.sh` ⟵ needs a real `.rip` sample. RIPscript is a base-36 vector command stream; a hand-authored one did not render and there is no sample anywhere in either repo. Owed by: nobody — it needs a genuine BBS `.rip` file dropped into `fixtures/`, then this is ~20 lines. Deliberately not faked.
+- [x] `rip.sh` — done once Rick pointed at a real corpus (`~/git/qb64/.../ripshow/RIP/`, 83 files). Uses DRAGON01 — the scene kaleidotron's own RIP notes are about. Asserts the vector scene rasterises green in BOTH the tile and the canvas, and that **picking a baud restarts it and draws it progressively** (2400 baud is ~20% at 2.5s; faster rates finish the art early and a "mid-draw" frame looks identical to the finished one).
 
 - [x] `history.sh` — mouse buttons 8/9 walk the folder history and repaint. Added `kt_mouse_back`/`kt_mouse_forward` (no core verb covers the thumb buttons).
 - [x] `sort.sh` — reversing the sort re-lays-out the row AND changes tile 1's identity, asserted by colour (red 01-red.png ascending → green 16-xbin.xb descending).
