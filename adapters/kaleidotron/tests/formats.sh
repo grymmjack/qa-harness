@@ -60,5 +60,11 @@ assert_regions_differ "$SNAP_ans" "$SNAP_bas" \
 assert_regions_differ "$SNAP_alpha" "$SNAP_gif" \
     "the transparent PNG and the GIF should not paint identically"
 
+# Colour, not just "not blank". A thumbnail that has not decoded yet paints a
+# grey SPINNER, which passes every differs-from-blank check above — that is
+# exactly how a .tga that could never decode sat in this suite looking green.
+kt_assert_dominant "$SNAP_png_flat" r "01-red.png should actually be red, not a spinner"
+kt_assert_dominant "$SNAP_pcx"      r "the PCX tile should carry its decoded colour, not a spinner"
+
 assert_window_exists
 info "=== formats test done ==="

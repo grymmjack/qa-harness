@@ -27,21 +27,77 @@ asserts on pixels for something no in-process test can observe.
 
 ## Tests
 
-| test | what it proves that a unit test cannot |
+24 files, ~150 assertions. Every one asserts on **pixels** for something no
+in-process test can observe.
+
+**Decode → paint**
+| test | claim |
 |---|---|
-| `grid.sh` | tiles render; a click opens the viewer; Escape returns to the same grid |
-| `formats.sh` | six decoder families each paint a **distinct, non-blank** tile — the decode → texture → paint chain, per format |
-| `viewer.sh` | the viewer really repaints on fit/zoom, and 1:1 after fit restores the **exact** pixels (integer device-pixel snapping) |
-| `textmode.sh` | ANSI art renders; the navigator minimap paints; CRT aspect restretches the blit; the 9-dot VGA cell re-decodes wider |
-| `code_view.sh` | a CP437 `.bas` rasterises as art **and** opens as text, and the two readings differ — guards three paint-time bugs that shipped |
-| `table.sh` | the hand-rolled table paints rows with thumbnails, and toggling back restores the grid |
-| `chrome.sh` | docks resize the central panel; F11 immersive hides and restores the chrome |
-| `rating.sh` | a star rating paints in the caption, on the **hovered** tile rather than the first one |
-| `recolor.sh` | an adjustment repaints both the viewer and the pane preview; the palette strip draws; Reset restores exactly |
+| `formats.sh` | png / alpha-png / gif / pcx / ans / bas each paint a distinct, non-blank tile |
+| `formats2.sh` | svg / bmp / tga / qoi / ico / .bin / .xb likewise — **and each is the COLOUR its fixture is**, which is what stops a loading spinner passing as art |
+| `textmode.sh` | ANSI renders, the navigator minimap paints, CRT aspect restretches the blit, the 9-dot VGA cell re-decodes wider |
+| `code_view.sh` | a CP437 `.bas` rasterises as art **and** opens as text, differently |
 | `transparency.sh` | a transparent pixel shows the **backdrop**, not the plain viewer background |
 | `anim.sh` | an unhovered GIF stays still; a hovered one advances frames |
-| `selection.sh` | the selection highlight and the viewed check are painted on the tile |
-| `search.sh` | the `/` filter re-lays-out the grid, and clearing restores it exactly |
+
+**Browsing**
+| test | claim |
+|---|---|
+| `grid.sh` | tiles render; a click opens the viewer; Escape returns to the same grid |
+| `navigation.sh` | entering/leaving a folder repaints the grid *and* rebuilds the breadcrumbs |
+| `history.sh` | the mouse thumb buttons (8/9) walk the folder history |
+| `archive.sh` | a `.zip` mounts and its members paint in their own colours |
+| `sort.sh` | reversing the sort re-lays-out the row and changes tile 1's identity |
+| `search.sh` | the `/` filter re-lays-out the grid; clearing restores it exactly |
+| `selection.sh` | the selection highlight and the viewed check are painted |
+| `rating.sh` | a rating paints in the caption, on the **hovered** tile |
+| `table.sh` | the hand-rolled table paints rows with thumbnails |
+
+**Viewer**
+| test | claim |
+|---|---|
+| `viewer.sh` | fit/zoom repaint; 1:1 after fit restores the **exact** pixels |
+| `pan.sh` | PageDown/End scroll, Home returns exactly, a drag pans |
+| `stepping.sh` | Left/Right step through the folder, asserted by colour |
+| `recolor.sh` | an adjustment repaints viewer *and* preview; Reset restores exactly |
+| `crt_fx.sh` | the scanline slider and the glow toggle change the blit |
+| `compare.sh` | two tiles enter the compare view and the diff pane carries an overlay |
+
+**Chrome, settings, files**
+| test | claim |
+|---|---|
+| `chrome.sh` | docks resize the central panel; F11 hides and restores |
+| `immersive_reveal.sh` | in immersive mode an edge approach reveals that bar |
+| `details.sh` | hovering a tile draws its preview and fills the metadata grid |
+| `explorer.sh` | the Places dock paints contents, not an empty panel |
+| `prefs.sh` | Preferences opens, section tabs swap the body, grid spacing re-lays-out the tiles |
+| `thumbsize.sh` | Ctrl+wheel resizes tiles; Reset restores exactly |
+| `ui_zoom.sh` | Ctrl +/- scales the **chrome** — the axis thumbnail zoom can never touch |
+| `fileops.sh` | trash re-lays-out the row, **Ctrl+Z restores it pixel-identically**, a new folder repaints |
+
+## Coverage — honestly
+
+Covered: every decoder that needs no external tool, the grid and table, the
+viewer's zoom/pan/step/recolor/post-FX, compare, all four docks, Preferences,
+both zoom axes, navigation/history/archives, file ops with undo, and the
+painted affordances (selection, ratings, viewed checks, transparency backdrop).
+
+**Not covered, and why** — this list is the point of the section:
+
+- **Audio, video, 3D, PDF** — plugin-gated and each needs an external tool
+  (ffmpeg, poppler/pdfium, an audio device) or is heavy enough to make the suite
+  fragile. Xvfb has no sound device at all, so audio playback cannot be asserted
+  here even in principle.
+- **Network sources** (16colo.rs, YouTube, Steam, Poly Haven, Google Fonts) —
+  they need the network and a live third-party API. A QA suite that fails when
+  someone else's site is down is worse than no suite.
+- **RIPscript** — no sample exists in either repo and a hand-authored one did not
+  render. Needs a genuine `.rip` file dropped into `fixtures/`; deliberately not
+  faked.
+- **The sample-pad / kit editor, MIDI, trackers** — no audio device offscreen.
+- **Colour ACCURACY beyond channel dominance.** `kt_assert_dominant` catches "red
+  became blue"; it would not catch a subtle gamma shift. Golden images would, at
+  the cost of breaking on every intentional visual change.
 
 ## What this adapter has to say about the app
 
@@ -152,6 +208,34 @@ re-opens the menu and the next click closes it instead of toggling. `Escape` is
 not a dismiss either — it leaves the **viewer**. Two separate versions of
 `textmode.sh` failed on this, both with the tell-tale signature of two different
 actions producing byte-identical results.
+
+### Traps found the hard way
+
+Each of these cost a debugging round; they are listed so the next test does not.
+
+- **A loading spinner is "not blank".** An undecoded thumbnail paints a grey arc,
+  which sails through any differs-from-blank check. That is how a `.tga` that
+  could **never** decode sat in this suite looking green. Use
+  `kt_assert_dominant` for anything whose colour is known — it rejects near-grey
+  outright.
+- **The rail icon at y=89 is "Open folder…", a NATIVE FILE DIALOG.** Clicking it
+  raises a modal that would wedge the run. The Explorer toggle is y=133, Details
+  y=172, Recolor y=211. Hover and read the tooltip; never guess rail positions.
+- **Tests are SOURCED into the runner's shell.** `GREEN=` in a test clobbers the
+  runner's ANSI colour variable and every later log line prints a PNG path
+  instead of turning green. Prefix snapshot variables (`GREEN_SNAP`).
+- **The breadcrumb path field opens PRE-FILLED and focused**, so typing appends
+  and Enter navigates to a path that does not exist — silently leaving the app
+  where it was. `kt_goto` sends ctrl+a first.
+- **`scroll_up` takes logical COORDS, not a tick count**, and every core input
+  verb focuses the window first, which drops a separately-held modifier. Ctrl+wheel
+  needs one atomic xdotool invocation — `kt_ctrl_wheel`.
+- **Menu-item coordinates must be calibrated, never guessed.** A click 77px off
+  hits nothing and reads exactly like a broken feature.
+- **Watch for assertions that pass for the wrong reason.** A stray `ctrl+plus`
+  in `thumbsize.sh` was zooming the whole UI, so "Ctrl+wheel resized the tiles"
+  passed while Ctrl+wheel was doing nothing at all. If a change is suspiciously
+  large or two different actions produce byte-identical results, look.
 
 **Compare regions of the same size.** `compare` diffs only the overlap of two
 differently-sized images, so a mismatched pair reports a small, meaningless count
