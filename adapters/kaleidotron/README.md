@@ -40,6 +40,8 @@ in-process test can observe.
 | `transparency.sh` | a transparent pixel shows the **backdrop**, not the plain viewer background |
 | `anim.sh` | an unhovered GIF stays still; a hovered one advances frames |
 | `rip.sh` | RIPscript renders on the EGA canvas, **and replays progressively at a modem baud rate** |
+| `plugin_formats.sh` | the five format PLUGINS decode and paint: PDF page 1, an ffmpeg frame, a CPU-rasterised model, a waveform, a font preview, a PSD composite |
+| `sauce.sh` | a SAUCE record is surfaced in Details — and *not* shown for a piece without one |
 
 **Browsing**
 | test | claim |
@@ -63,6 +65,9 @@ in-process test can observe.
 | `recolor.sh` | an adjustment repaints viewer *and* preview; Reset restores exactly |
 | `crt_fx.sh` | the scanline slider and the glow toggle change the blit |
 | `compare.sh` | two tiles enter the compare view and the diff pane carries an overlay |
+| `threed.sh` | a model rasterises, a drag orbits it, the wireframe overlay composes, Reset returns the camera |
+| `video.sh` | a video plays in-app and seeking shows a different frame |
+| `osd.sh` | the metadata OSD draws over the image and fades out |
 
 **Chrome, settings, files**
 | test | claim |
@@ -75,6 +80,11 @@ in-process test can observe.
 | `thumbsize.sh` | Ctrl+wheel resizes tiles; Reset restores exactly |
 | `ui_zoom.sh` | Ctrl +/- scales the **chrome** — the axis thumbnail zoom can never touch |
 | `fileops.sh` | trash re-lays-out the row, **Ctrl+Z restores it pixel-identically**, a new folder repaints |
+| `text_edit.sh` | the code-page combo re-decodes CP437↔Latin-1 and restores exactly; Find highlights; Wrap drops the gutter |
+| `tasks.sh` | a discovered `.vscode/tasks.json` adds a Run menu, streams a task into the output panel, and reports a failure |
+| `theme.sh` | a theme recolours the chrome, and scoping it to "Code only" returns the chrome to the built-in look |
+| `multiselect.sh` | ctrl+click adds to the selection and the status bar follows |
+| `table_columns.sh` | hiding a column re-lays-out the table |
 
 ## Coverage — honestly
 
@@ -85,10 +95,12 @@ painted affordances (selection, ratings, viewed checks, transparency backdrop).
 
 **Not covered, and why** — this list is the point of the section:
 
-- **Audio, video, 3D, PDF** — plugin-gated and each needs an external tool
-  (ffmpeg, poppler/pdfium, an audio device) or is heavy enough to make the suite
-  fragile. Xvfb has no sound device at all, so audio playback cannot be asserted
-  here even in principle.
+- **Audio PLAYBACK** — Xvfb has no sound device, so it cannot be asserted here
+  even in principle. The audio *waveform tile* is covered (decoding is
+  device-free); the transport, the sample pads and MIDI are not.
+- **Blender `.blend` renders** — `blender` is not installed on this machine, so
+  the render-in-place path is untested. Everything else plugin-gated (PDF, video,
+  3D, fonts, PSD) IS covered — see `plugin_formats.sh`.
 - **Network sources** (16colo.rs, YouTube, Steam, Poly Haven, Google Fonts) —
   they need the network and a live third-party API. A QA suite that fails when
   someone else's site is down is worse than no suite.
@@ -96,6 +108,12 @@ painted affordances (selection, ratings, viewed checks, transparency backdrop).
 - **Colour ACCURACY beyond channel dominance.** `kt_assert_dominant` catches "red
   became blue"; it would not catch a subtle gamma shift. Golden images would, at
   the cost of breaking on every intentional visual change.
+- **Arrow-key grid navigation** — because there isn't any. Pressing Right one,
+  two or three times then Enter opens the *same* file every time, and a tile's
+  card is pixel-identical before and after (0 px). Those bindings belong to the
+  viewer and the sample browser. A test was written, found this, and was deleted
+  rather than assert behaviour that is not there. **Worth fixing in the app:**
+  keyboard users currently navigate the grid blind.
 
 ## What this adapter has to say about the app
 
@@ -234,6 +252,30 @@ Each of these cost a debugging round; they are listed so the next test does not.
   in `thumbsize.sh` was zooming the whole UI, so "Ctrl+wheel resized the tiles"
   passed while Ctrl+wheel was doing nothing at all. If a change is suspiciously
   large or two different actions produce byte-identical results, look.
+
+- **Two `bin/qa` runs must never overlap.** The sandbox path is fixed, so a
+  second run wipes the first's `HOME` mid-test and both dissolve into "snapshot
+  file missing" and phantom failures. Observed while a background full run
+  overlapped a foreground single-test run.
+- **A fixture that changes the SHAPE of a menu cannot live in the folder other
+  tests measure.** Dropping a `.vscode/tasks.json` beside the images added a
+  "▶ Tasks" entry to the top of every file's context menu, shifted everything
+  below it ~30px, and broke `fileops` and `compare`. It lives in
+  `fixtures-tasks/` now.
+- **`cp src/*` does not match dotfiles.** `.vscode/` never reached the sandbox,
+  so calibration (pointed at the real directory) saw the Run menu and the test
+  (pointed at the copy) did not. Use `cp -R src/. dest/`.
+- **Check what ImageMagick actually wrote.** It emitted a 1-bit PCX, a
+  colour-mapped TGA and a 16-bit PSD from innocuous-looking commands — none of
+  which the app reads. `identify -format '%m depth=%z class=%[type]'` before
+  trusting a fixture.
+- **Hovering the OSD pins it open**, and the click that opens a file leaves the
+  pointer inside its rect — so it never fades and the test hangs on a frame that
+  will not change.
+- **A "differs" of a few hundred pixels is not a claim.** `assert_regions_same`
+  treats up to 1500 as identical, so an assertion that "passes" at 41 or 119 px
+  is measuring noise. Point the region at where the change actually is (the
+  gutter, the accent-coloured sort bar) until the number is unambiguous.
 
 **Compare regions of the same size.** `compare` diffs only the overlap of two
 differently-sized images, so a mismatched pair reports a small, meaningless count

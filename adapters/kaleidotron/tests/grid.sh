@@ -30,7 +30,7 @@ region viewer 480 290 190 190 "centre of the viewer, where an opened image lands
 # with a same-sized patch of empty background from the second grid row, which
 # stays blank with only four fixtures.
 region tile1    70  70 120 100 "the first thumbnail (01-red.png)"
-region emptyref 70 420 120 100 "background below the grid — the same size as tile1"
+region emptyref 70 570 120 100 "empty background BELOW the last grid row. y=570, not 420: the folder grew to three rows and the old reference sat on a tile, same size as tile1"
 
 # ── Baseline: the grid is up, the viewer area is empty background ────────────
 snap viewer grid_mode

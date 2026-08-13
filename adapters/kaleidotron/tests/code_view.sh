@@ -22,7 +22,7 @@ park_mouse
 
 # 09-code.bas is row 2, position 3 → tile centre (450, 290).
 region tile     390 238 120 100 "the 09-code.bas thumbnail"
-region tile_ref 390 420 120 100 "empty background, tile-sized"
+region tile_ref 390 570 120 100 "empty background BELOW the last grid row. y=570, not 420: the folder grew to three rows and the old reference sat on a tile, tile-sized"
 region page     100  80 800 200 "the top of whichever viewer opened"
 
 snap tile_ref

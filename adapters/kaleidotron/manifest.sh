@@ -54,9 +54,12 @@ adapter_ensure_config() {
     # The blessed config. Only three things are pinned, and each removes a source
     # of drift rather than expressing a preference:
     #
-    #   plugin_code   ON  — source/text is a format PLUGIN and ships OFF, so .bas
-    #                       fixtures would not even be listed. Tests that need it
-    #                       must still call kt_refresh (see below).
+    #   the plugins   ON  — every format plugin (code, pdf, audio, 3d, video)
+    #                       ships OFF, so their fixtures would not even be listed.
+    #                       Enabling them here is what makes the plugin formats
+    #                       testable at all; the app applies settings.json BEFORE
+    #                       the first scan (a bug this suite found and got fixed),
+    #                       so they appear on the first frame with no refresh.
     #   git_enabled   OFF — the fixtures live inside a git repo, so tiles would
     #                       carry a git badge whose colour depends on whether the
     #                       fixtures happen to be committed.
@@ -70,7 +73,13 @@ adapter_ensure_config() {
     # RESIZES EVERY TILE and invalidates every calibrated coordinate in the suite.
     cat > "$_KT_SANDBOX/data/kaleidotron/settings.json" <<'JSON'
 {
-  "plugins": { "plugin_code": true },
+  "plugins": {
+    "plugin_code": true,
+    "plugin_pdf": true,
+    "plugin_audio": true,
+    "plugin_3d": true,
+    "plugin_video": true
+  },
   "paths":   { "git_enabled": false },
   "viewer":  { "osd_enabled": false }
 }
@@ -92,8 +101,17 @@ JSON
     mkdir -p "$_KT_FIXTURES" "$_KT_NAV"
     # -L dereferences, --no-preserve=xattr drops any rating that leaked onto the
     # source before this was fixed, so a stale xattr cannot resurrect itself.
-    cp -L --no-preserve=xattr "$_KT_FIXTURES_SRC"/* "$_KT_FIXTURES"/ 2>/dev/null || true
-    cp -RL --no-preserve=xattr "$_KT_NAV_SRC"/* "$_KT_NAV"/ 2>/dev/null || true
+    # `src/.` not `src/*`: the glob does NOT match dotfiles, and the fixtures carry
+    # a `.vscode/tasks.json` that the project-tasks feature is discovered through.
+    # With the glob, calibration (which points at the real directory) saw the Run
+    # menu and the test (which runs against this copy) did not — the tasks simply
+    # were not there.
+    cp -RL --no-preserve=xattr "$_KT_FIXTURES_SRC"/. "$_KT_FIXTURES"/ 2>/dev/null || true
+    cp -RL --no-preserve=xattr "$_KT_NAV_SRC"/. "$_KT_NAV"/ 2>/dev/null || true
+    rm -rf "$_KT_TASKS"; mkdir -p "$_KT_TASKS"
+    cp -RL --no-preserve=xattr "$_KT_TASKS_SRC"/. "$_KT_TASKS"/ 2>/dev/null || true
+    rm -rf "$_KT_PLUGINS"; mkdir -p "$_KT_PLUGINS"
+    cp -RL --no-preserve=xattr "$_KT_PLUGINS_SRC"/. "$_KT_PLUGINS"/ 2>/dev/null || true
 }
 
 # Where the app is actually pointed: a throwaway copy, never the repo's originals.
@@ -107,6 +125,21 @@ _KT_FIXTURES="$_KT_SANDBOX/fixtures"
 # the other tests. Tests reach it with `kt_goto`.
 _KT_NAV_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fixtures-nav"
 _KT_NAV="$_KT_SANDBOX/fixtures-nav"
+
+# A THIRD set, for the format PLUGINS (PDF, video, 3D, audio, fonts, PSD). Also
+# kept separate, for the same coordinate-stability reason — and because these are
+# the heaviest decode paths, so a test that does not need them should not pay for
+# them on every launch.
+_KT_PLUGINS_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fixtures-plugins"
+_KT_PLUGINS="$_KT_SANDBOX/fixtures-plugins"
+
+# A FOURTH set, carrying a `.vscode/tasks.json`. Also separate, and for a reason
+# worth recording: a discovered tasks.json adds a "▶ Tasks" entry to the TOP of
+# every file's context menu, which shifted every other entry down ~30px and broke
+# the calibrated coordinates in `fileops` and `compare`. A fixture that changes
+# the shape of a menu cannot live in the folder other tests measure.
+_KT_TASKS_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fixtures-tasks"
+_KT_TASKS="$_KT_SANDBOX/fixtures-tasks"
 
 # ── 3. Launch / quit ─────────────────────────────────────────────────────────
 adapter_launch() {
@@ -250,6 +283,19 @@ kt_ctrl_wheel() {   # x y up|down [ticks]
     args+=(keyup ctrl)
     xdotool "${args[@]}"
     sleep 0.3
+}
+
+# ── 5d4. kt_click_raw — click WITHOUT the focus/raise that precedes core input ─
+# Every core input verb calls `adapter_pre_input` first, which does
+# `windowfocus --sync` + `windowraise`. That is exactly right for ordinary input
+# under a WM-less Xvfb — and wrong once a POPUP is open, because raising the
+# window can dismiss it, so the click then lands on whatever is underneath.
+# Use this for the second click of an open-menu-then-choose gesture.
+kt_click_raw() {
+    local sx sy
+    read -r sx sy <<< "$(adapter_to_screen "$1" "$2")"
+    xdotool mousemove "$sx" "$sy" click 1
+    sleep 0.25
 }
 
 kt_mouse_back()    { xdotool click 8; sleep 0.2; }

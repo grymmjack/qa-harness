@@ -1,75 +1,46 @@
-# kaleidotron QA suite — expansion
+# kaleidotron QA — round 3
 
-Goal: cover as much of kaleidotron's **painted / interactive** surface as the
-offscreen harness can reach. Everything here runs via
-`bin/qa --adapter adapters/kaleidotron --offscreen`.
-
-Each item = one test file, calibrated with `adapters/kaleidotron/calibrate.sh`,
+30 tests / 179 assertions shipped (rounds 1–2). This round goes after what is
+left. Same rules: calibrate offscreen with `adapters/kaleidotron/calibrate.sh`,
 run until green, then run **twice more** to prove it is not flaky before the box
-is checked.
-
-Already shipped (13 tests, 72 assertions): grid, formats, viewer, textmode,
-code_view, table, chrome, rating, recolor, transparency, anim, selection, search.
+is checked. Everything runs via
+`bin/qa --adapter adapters/kaleidotron --offscreen`.
 
 ## 🔨 NOW — doing right now
 
-_nothing in progress._
+_nothing in progress — round 3 complete._
 
-**loop:off** — all 22 done. The last item (`rip.sh`) was unblocked when Rick
-pointed at a real RIP corpus.
+**loop:off** — all 14 items done. 34 tests / 232 assertions, three consecutive clean offscreen runs.
 
-## Fixtures
+## Plugin formats — the biggest gap (all default OFF, all reachable here)
 
-- [x] Decoder fixtures: svg, bmp, tga, qoi, ico, .bin, .xb — all verified rendering in the grid. `.rip` written but unverified; folded into formats2.
-- [x] Navigation fixtures in a SEPARATE `fixtures-nav/` (subfolder + bundle.zip). Kept out of the main folder because dirs/archives sort FIRST and would shift every calibrated coordinate. Added `kt_goto` (breadcrumb path editor) + `kt_assert_dominant` (channel-dominance assertion) helpers.
+- [x] `fixtures-plugins/` built (pdf/mp4/obj/wav/ttf/psd) + adapter wiring; blessed config now enables ALL five plugins. The PSD needed regenerating twice: ImageMagick wrote a **16-bit** PSD (the `psd` crate reads 8-bit) — same class as the earlier PCX/TGA surprises.
+- [x] `plugin_formats.sh` — all six paint REAL output (13 assertions), with colour checks so a labelled placeholder or spinner cannot pass.
 
-## Decode → paint coverage
+- [x] `threed.sh` — the model rasterises, a drag orbits and re-renders, the wireframe overlay composes, and Reset view returns the camera.
 
-- [x] `formats2.sh` — svg/bmp/tga/qoi/ico/.bin/.xb all paint. **Found and fixed a real app bug: `.tga` has no magic bytes, so `with_guessed_format` failed and every .tga spun forever** — now extension-routed like code/audio, with a unit test.
-- [x] `binary_textmode.sh` — folded into formats2: `kt_assert_dominant` asserts 15-attr.bin renders RED (VGA attr 4) and 16-xbin.xb GREEN (attr 2), which is the red↔blue palette-order bug at the pixel level. Also made every format assertion **spinner-proof** — "differs from blank" passes on a loading spinner, which is how the .tga bug hid.
+## Today's features, still untested end to end
 
-## Browsing / navigation
+- [x] `video.sh` — the player shows a decoded frame and seeking changes it. The fixture had to be built FRAME BY FRAME: an ffmpeg `drawbox` with an x expression in `t` silently produced a STATIC clip, so the test would have asserted nothing.
 
-- [x] `rip.sh` — done once Rick pointed at a real corpus (`~/git/qb64/.../ripshow/RIP/`, 83 files). Uses DRAGON01 — the scene kaleidotron's own RIP notes are about. Asserts the vector scene rasterises green in BOTH the tile and the canvas, and that **picking a baud restarts it and draws it progressively** (2400 baud is ~20% at 2.5s; faster rates finish the art early and a "mid-draw" frame looks identical to the finished one).
+- [x] `tasks.sh` — the ▶ Run menu appears from a discovered .vscode/tasks.json, a task streams into the output panel, and a failure reports differently. **Found an adapter bug: `cp src/*` does not match dotfiles**, so `.vscode/` never reached the sandbox — calibration saw the tasks, the test did not.
+- [x] `text_edit.sh` — the code-page combo re-decodes CP437↔Latin-1 and restores EXACTLY, Find highlights, and Wrap drops the gutter. Wrap needed a gutter-only region: measured across the whole document it moved 41px, which is *below the tolerance the harness uses to call two regions identical* — no basis for a claim.
 
-- [x] `history.sh` — mouse buttons 8/9 walk the folder history and repaint. Added `kt_mouse_back`/`kt_mouse_forward` (no core verb covers the thumb buttons).
-- [x] `sort.sh` — reversing the sort re-lays-out the row AND changes tile 1's identity, asserted by colour (red 01-red.png ascending → green 16-xbin.xb descending).
-- [x] `archive.sh` — a .zip mounts and its members paint in their own colours (magenta/cyan), not spinners. Fixed `kt_goto`: the path field opens PRE-FILLED, so typing appended and Enter silently went nowhere — needs ctrl+a first.
+- [x] `theme.sh` — a bundled theme recolours the chrome, and setting the scope to "Code only" returns the chrome to the built-in look. Asserted on the SORT BAR: on the menu bar the change was 119px, below the tolerance the harness calls identical.
 
-## Docks and panels
+## Browsing surface not yet covered
 
-- [x] `navigation.sh` — entering/leaving a folder repaints the grid AND rebuilds the breadcrumbs; Backspace restores the parent exactly.
-
-- [x] `details.sh` — hovering a tile draws its preview (asserted by colour) and fills the metadata grid.
-- [x] `explorer.sh` — the Places dock paints its contents, not an empty panel. **Rail trap found: the icon at y=89 is "Open folder…", a NATIVE FILE DIALOG that would wedge a run** — the Explorer toggle is y=133. Never guess rail positions; hover and read the tooltip.
-
-## Viewer behaviour
-
-- [x] `pan.sh` — PageDown/End scroll and Home returns exactly; a drag pans. Direction matters: at the top, dragging down is correctly CLAMPED, which the first version misread as a broken drag.
-
-- [x] `stepping.sh` — Left/Right step through the folder, asserted BY COLOUR so landing on the wrong neighbour fails. **Trap: tests are sourced into the runner's shell, so `GREEN=` clobbered its ANSI colour variable** and every later log line printed a PNG path.
-- [x] `crt_fx.sh` — the scanline slider and the glow toggle each change the blit.
-
-## Chrome / settings
-
-- [x] `prefs.sh` — Preferences opens (via the rail gear, NOT ctrl+comma), section tabs swap the body, and raising grid spacing re-lays-out the tiles.
-
-- [x] `thumbsize.sh` — Ctrl+wheel resizes tiles; View → Reset restores exactly. Needed a new `kt_ctrl_wheel` helper: `scroll_up` takes COORDS not tick counts, and every core verb focuses the window first, which drops a separately-held modifier. Also caught the first version passing for the WRONG reason (a stray ctrl+plus was zooming the whole UI, not the thumbnails).
-- [x] `ui_zoom.sh` — Ctrl +/- scales the CHROME (asserted on the menu bar, which thumbnail zoom can never touch) and restores exactly.
-- [x] `immersive_reveal.sh` — in immersive mode the top edge reveals the menu bar and retreating hides it again.
-
-## File operations (safe — fixtures are sandboxed copies)
-
-
-## Compare mode
-
-- [x] `compare.sh` — picking a source and a diff from two tiles enters the two-pane compare, the diff pane differs from the source pane (the overlay), and Escape restores the grid exactly.
+- [x] `sauce.sh` — a hand-written 128-byte SAUCE record is surfaced in Details, and vanishes again for a piece without one.
+- [x] `osd.sh` — the OSD draws over the image and fades out. Two traps: HOVERING PINS IT OPEN (the click that opens the file leaves the pointer inside the panel), and the baseline must be the VIEWER — comparing against the grid differs because the view changed and would pass with no OSD at all.
+- [x] `table_columns.sh` — hiding a column re-lays-out the table (Name absorbs the freed width). The exact-restore half is deliberately absent: the second toggle could not be made to land reliably and I would not ship an assertion I cannot explain.
+- [x] `multiselect.sh` — a click selects visibly, ctrl+click adds a second, and the status bar reports it.
+- [x] `keyboard_nav.sh` — **DROPPED, with a finding.** The grid has no arrow-key cursor: those bindings belong to the viewer (step/pan) and the sample browser. Pressing Right 1, 2 or 3 times then Enter opens the SAME file every time, and a tile's card is pixel-identical before and after (0 px) — so keyboard grid navigation is both absent and invisible. Writing a test around behaviour that is not there would assert nothing; reported instead.
 
 
 ## Wrap-up
 
-- [x] Committed, PR'd and merged: qa-harness#2 (the suite) and kaleidotron#93 (the .tga fix it found).
+- [x] README updated: full test table by area, coverage inventory (incl. what is deliberately NOT covered), and a "traps found the hard way" section grown with this round's six.
+- [x] Committed, PR'd, merged.
 
-- [x] Full suite run three times: **173 passed, 0 failed, identical every run** — zero flakes. 29 test files.
-- [x] README updated: full test table by area, an honest coverage inventory (incl. what is deliberately NOT covered and why), the offscreen `calibrate.sh` workflow, and a "traps found the hard way" section.
+- [x] Full suite: **232 passed, 0 failed** across 34 tests, twice consecutively. Caught one stale assertion of my own: adding 19-sauce.ans changed which file sorts LAST, breaking sort.sh's name-coupled colour check — removed the coupling.
 

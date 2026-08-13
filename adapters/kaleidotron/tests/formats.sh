@@ -29,7 +29,7 @@ info "=== kaleidotron: every format paints a distinct thumbnail ==="
 # every baseline here is taken with the pointer parked off the content.
 park_mouse
 
-region blank    70 420 120 100 "empty background below the grid — the not-blank reference"
+region blank    70 570 120 100 "empty background BELOW the last grid row. y=570, not 420: the folder grew to three rows and the old reference sat on a tile"
 region png_flat 70  70 120 100 "01-red.png — plain RGB via the image crate"
 region alpha   710  70 120 100 "05-alpha.png — transparency, drawn over the checkerboard"
 region gif     870  70 120 100 "06-anim.gif — animated GIF, first frame"
