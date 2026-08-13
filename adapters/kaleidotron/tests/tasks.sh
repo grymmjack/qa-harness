@@ -12,7 +12,12 @@
 # hand-edited files have both, and `serde_json` rejects both, so the strip has to
 # be exercised by a real file and not only by a unit fixture.
 #
-#   ▶ Run (700,61) → "QA: Say hello" (724,99) · "QA: Fail on purpose" (742,142)
+# The menu groups by `group.kind`, NOT by file order — Build, then Test, then
+# Other — so a task without a group lands at the BOTTOM regardless of where it
+# sits in the file:
+#   ▶ Run (700,61) → Build: "QA: Say hello" (724,99)
+#                    Test:  "QA: Fail on purpose" (742,142)
+#                    Other: "QA: Env block" (725,186)
 
 info "=== kaleidotron: project tasks are discovered, run and reported ==="
 
@@ -46,6 +51,21 @@ park_mouse
 snap panel ran
 assert_regions_differ "$NO_PANEL" "$SNAP_RESULT" \
     "running a task should open the output panel and stream its output"
+RAN="$SNAP_RESULT"
+
+# The `env` block is kaleidotron's OWN build configuration — the replacement for
+# a `${config:}` that used to read VS Code's settings.json. This task both
+# SUBSTITUTES ${env:QA_TOOL} into its command line and reads $QA_MODE from the
+# environment it was spawned with, so one run proves both halves reach a real
+# process.
+click 700 61
+wait_for 1.0 "Run menu open again"
+kt_click_raw 725 186
+wait_for 2.5 "QA: Env block ran"
+park_mouse
+snap panel env_block
+assert_regions_differ "$RAN" "$SNAP_RESULT" \
+    "the env block should substitute into the command AND reach the process"
 RAN="$SNAP_RESULT"
 
 # A failing task must look different from a successful one — the panel reports
