@@ -39,6 +39,7 @@ in-process test can observe.
 | `code_view.sh` | a CP437 `.bas` rasterises as art **and** opens as text, differently |
 | `transparency.sh` | a transparent pixel shows the **backdrop**, not the plain viewer background |
 | `anim.sh` | an unhovered GIF stays still; a hovered one advances frames |
+| `rip.sh` | RIPscript renders on the EGA canvas, **and replays progressively at a modem baud rate** |
 
 **Browsing**
 | test | claim |
@@ -91,9 +92,6 @@ painted affordances (selection, ratings, viewed checks, transparency backdrop).
 - **Network sources** (16colo.rs, YouTube, Steam, Poly Haven, Google Fonts) —
   they need the network and a live third-party API. A QA suite that fails when
   someone else's site is down is worse than no suite.
-- **RIPscript** — no sample exists in either repo and a hand-authored one did not
-  render. Needs a genuine `.rip` file dropped into `fixtures/`; deliberately not
-  faked.
 - **The sample-pad / kit editor, MIDI, trackers** — no audio device offscreen.
 - **Colour ACCURACY beyond channel dominance.** `kt_assert_dominant` catches "red
   became blue"; it would not catch a subtle gamma shift. Golden images would, at
@@ -246,6 +244,12 @@ background. Prove a guard fails when it should — `mv fixtures /tmp/hold; mkdir
 fixtures` and re-run — before trusting it.
 
 ## Fixtures
+
+`18-dragon.rip` is genuine BBS-era RIPscript (`Dragon_01`, "Ripped by Herb Dunn
+5/93") rather than something synthesised — RIP is a vector command stream and a
+hand-authored one did not render at all. It is also the exact scene kaleidotron's
+own RIP notes are about (closing the dragon's body outline, sealing its eye), so
+a regression in the BGI primitives shows up here first.
 
 `fixtures/` holds one file per decoder family, chosen so each paints something
 unmistakably different: flat-colour PNGs with distinct shapes, a transparent PNG
