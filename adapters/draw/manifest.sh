@@ -20,6 +20,9 @@ WINDOW_TITLE="DRAW v"
 DRAW_PID=""
 DRAW_WID=""
 DRAW_EXTRA_ARGS="${DRAW_EXTRA_ARGS:-}"
+# Per-test DRAW --option overrides, computed from a test file's `# QA-OPTIONS:`
+# line by adapter_pre_launch. Reset each test so options never leak forward.
+DRAW_TEST_OPTIONS=""
 
 # ── QA config isolation ───────────────────────────────────────────────────────
 # DRAW is always launched with --config DRAW.qa.cfg, so runs are deterministic
@@ -295,6 +298,27 @@ canvas_focus() {
 }
 
 # ── 2. Launch / quit ─────────────────────────────────────────────────────────
+# adapter_pre_launch <test_file> — runner hook, called before the per-test launch.
+# Lets a test request DRAW --option overrides for its OWN launch via a magic line:
+#     # QA-OPTIONS: GROUP_DRAW_AUTO_LAYER=TRUE TOOLTIPS_DISABLED=FALSE
+# Turns each KEY=VALUE into a "--option KEY=VALUE" arg (DRAW's CLI override, which
+# beats the .cfg). This is how a test flips a config option WITHOUT the fragile
+# edit-cfg-then-relaunch dance (a mid-test relaunch disturbs window/click state).
+# DRAW_TEST_OPTIONS is reset every call so options never leak into the next test.
+adapter_pre_launch() {
+    local test_file=$1
+    DRAW_TEST_OPTIONS=""
+    [[ -f "$test_file" ]] || return 0
+    local line kv
+    line=$(grep -m1 -E '^[[:space:]]*#[[:space:]]*QA-OPTIONS:' "$test_file" 2>/dev/null)
+    [[ -n "$line" ]] || return 0
+    line=${line#*QA-OPTIONS:}
+    for kv in $line; do
+        [[ "$kv" == *=* ]] && DRAW_TEST_OPTIONS+=" --option $kv"
+    done
+    [[ -n "$DRAW_TEST_OPTIONS" ]] && info "Per-test DRAW options:${DRAW_TEST_OPTIONS}"
+}
+
 # Ported from draw-qa.sh draw_launch. Exposed to tests under that name too.
 draw_launch() {
     local timeout=${1:-15}
@@ -306,7 +330,7 @@ draw_launch() {
     # Launch from DRAW_ROOT, not QA/. DRAW never CHDIRs and resolves some assets
     # against the current directory ("./ASSETS/..."), so running elsewhere breaks
     # palette .GPL previews and friends.
-    ( cd "$DRAW_ROOT" && exec "$DRAW_BIN" --config "$QA_CFG" $DRAW_EXTRA_ARGS ) &
+    ( cd "$DRAW_ROOT" && exec "$DRAW_BIN" --config "$QA_CFG" $DRAW_EXTRA_ARGS $DRAW_TEST_OPTIONS ) &
     DRAW_PID=$!
 
     info "Waiting for window (up to ${timeout}s) — PID=$DRAW_PID"

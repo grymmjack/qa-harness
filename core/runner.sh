@@ -200,6 +200,9 @@ run_test_file() {
     # Each test is atomic: fresh app instance. Re-assert the blessed cfg first —
     # the previous test's app may have written its live config back over it.
     adapter_ensure_config
+    # Optional adapter hook: derive per-test launch options from the test file
+    # (e.g. DRAW's `# QA-OPTIONS:` → --option overrides) before the app starts.
+    if declare -F adapter_pre_launch >/dev/null; then adapter_pre_launch "$test_file"; fi
     _crash_snapshot
     adapter_launch 15
     # Source directly in the current shell — pid/wid/counters all shared.
