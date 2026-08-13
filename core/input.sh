@@ -136,6 +136,11 @@ ctrl_shift_click() { with_mods ctrl+shift click "$@"; }
 shift_drag()  { with_mods shift       drag "$@"; }
 ctrl_drag()   { with_mods ctrl        drag "$@"; }
 alt_drag()    { with_mods alt         drag "$@"; }
+# Modifier + wheel (e.g. DRAW's Shift+wheel canvas pan). scroll_up/down take X Y.
+shift_scroll_up()   { with_mods shift scroll_up "$@"; }
+shift_scroll_down() { with_mods shift scroll_down "$@"; }
+ctrl_scroll_up()    { with_mods ctrl  scroll_up "$@"; }
+ctrl_scroll_down()  { with_mods ctrl  scroll_down "$@"; }
 
 # type text (printable chars only)
 type_text() {
