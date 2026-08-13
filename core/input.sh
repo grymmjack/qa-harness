@@ -109,6 +109,34 @@ scroll_down() {
     driver_input_scroll down 1; sleep 0.05
 }
 
+# with_mods "ctrl+shift" <gesture> [args…] — hold the named modifier keys DOWN,
+# run any pointer gesture (click / right_click / middle_click / drag / hover /
+# scroll_up / scroll_down / mouse_down …), then release the modifiers in reverse.
+# This is the "mixed WITH mouse input" primitive: any modifier combo can wrap any
+# gesture — Ctrl+click, Shift+drag, Alt+click, Ctrl+Shift+wheel. Modifier names:
+# ctrl shift alt super (xdotool names). Each is held with a beat so the app's
+# per-frame modifier poll registers it before the gesture fires.
+with_mods() {
+    local combo=$1; shift
+    local oldIFS=$IFS; IFS='+'; local -a _mods=($combo); IFS=$oldIFS
+    local m i rc
+    for m in "${_mods[@]}"; do driver_input_key_hold down "$m"; sleep 0.06; done
+    sleep 0.06
+    dbg "with_mods [$combo] $*"
+    "$@"; rc=$?
+    for (( i=${#_mods[@]}-1; i>=0; i-- )); do driver_input_key_hold up "${_mods[$i]}"; done
+    sleep 0.05
+    return $rc
+}
+# Convenience wrappers for the common single-modifier gestures.
+ctrl_click()  { with_mods ctrl        click "$@"; }
+shift_click() { with_mods shift       click "$@"; }
+alt_click()   { with_mods alt         click "$@"; }
+ctrl_shift_click() { with_mods ctrl+shift click "$@"; }
+shift_drag()  { with_mods shift       drag "$@"; }
+ctrl_drag()   { with_mods ctrl        drag "$@"; }
+alt_drag()    { with_mods alt         drag "$@"; }
+
 # type text (printable chars only)
 type_text() {
     _qa_pre_input
