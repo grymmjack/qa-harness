@@ -297,6 +297,26 @@ canvas_focus() {
     fi
 }
 
+# open_effect <category_index> <child_index>
+# Navigate DRAW's EFFECTS menu flyout categories: open EFFECTS, click the
+# category row (opens its flyout), then click the child effect.
+# EFFECTS root is at viewport (395,6). Dropdown rows START at subY=14 (so row
+# centres are 20 + N*12). Each category flyout is anchored to its parent row's
+# top (genY = 14 + cat*12), drawn to the right at x~513..614 (centre ~560); child
+# rows start at genY+2, 12px tall, so child centre y = 22 + cat*12 + child*12.
+# Categories: 0=ADJUST 1=STYLIZE 2=LAYER FX 3=DISTORT 4=PIXELATE 5=NOISE 6=RENDER
+open_effect() {
+    local cat=$1 child=$2
+    local caty=$(( 20 + cat * 12 ))            # category row centre
+    local childy=$(( 22 + cat * 12 + child * 12 ))  # child row centre
+    click 395 6           # EFFECTS root
+    sleep 0.25
+    click 420 "$caty"     # category row -> opens flyout
+    sleep 0.25
+    click 560 "$childy"   # child effect
+    sleep 0.3
+}
+
 # ── 2. Launch / quit ─────────────────────────────────────────────────────────
 # adapter_pre_launch <test_file> — runner hook, called before the per-test launch.
 # Lets a test request DRAW --option overrides for its OWN launch via a magic line:
