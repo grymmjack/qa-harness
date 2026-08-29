@@ -10,7 +10,10 @@
 
 # ── DRAW locations ───────────────────────────────────────────────────────────
 DRAW_ROOT="${DRAW_ROOT:-/home/grymmjack/git/DRAW}"
-DRAW_BIN="$DRAW_ROOT/DRAW.run"
+# Overridable so a scratch/alternate binary can be exercised without disturbing
+# the tree's DRAW.run (e.g. validating a crash trap against a deliberately-broken
+# build). Still launched from DRAW_ROOT so asset paths resolve.
+DRAW_BIN="${DRAW_BIN:-$DRAW_ROOT/DRAW.run}"
 
 # ── 1. Identity ──────────────────────────────────────────────────────────────
 ADAPTER_NAME="${QA_PROJECT:-DRAW}"          # report title / project name
@@ -313,13 +316,17 @@ canvas_focus() {
 #             7=SHAPE 8=TEXTURE
 open_effect() {
     local cat=$1 child=$2
-    local caty=$(( 20 + cat * 12 ))            # category row centre
-    local childy=$(( 22 + cat * 12 + child * 12 ))  # child row centre
+    # 2026-08-15: the EFFECTS menu now pins 3 items (Redo/Recall/Blend Last Effect)
+    # + a divider at the TOP, pushing every category down: 3*MENU_ITEM_HEIGHT(12) +
+    # MENU_DIVIDER_HEIGHT(5) = 41px.
+    local top=41
+    local caty=$(( 20 + top + cat * 12 ))            # category row centre
+    local childy=$(( 22 + top + cat * 12 + child * 12 ))  # child row centre
     click 395 6           # EFFECTS root
     sleep 0.25
     click 420 "$caty"     # category row -> opens flyout
     sleep 0.25
-    click 490 "$childy"   # child effect (near flyout left edge, over the label)
+    click 560 "$childy"   # child effect (flyout moved right — wide pinned labels)
     sleep 0.3
 }
 
@@ -353,10 +360,19 @@ draw_launch() {
         exit 1
     fi
     info "Launching DRAW (--config $(basename "$QA_CFG"))..."
+    # Capture DRAW's console ($CONSOLE) output to a per-launch log so runtime
+    # errors are trappable. DRAW survives a trapped error (FatalError RESUME NEXT)
+    # and — critically — a crash that recurs inside the RENDER loop never flushes a
+    # crash-report FILE, so the crash-log-dir trap is blind to it. Its only trace
+    # is the console line "Runtime error: Line N (in FILE) / <message>". A fresh
+    # (truncated) log per launch means a grep of it sees only THIS test's output.
+    DRAW_CONSOLE_LOG="${TMPDIR:-/tmp}/draw-qa-console.log"
+    : > "$DRAW_CONSOLE_LOG"
     # Launch from DRAW_ROOT, not QA/. DRAW never CHDIRs and resolves some assets
     # against the current directory ("./ASSETS/..."), so running elsewhere breaks
-    # palette .GPL previews and friends.
-    ( cd "$DRAW_ROOT" && exec "$DRAW_BIN" --config "$QA_CFG" $DRAW_EXTRA_ARGS $DRAW_TEST_OPTIONS ) &
+    # palette .GPL previews and friends. Redirect (not tee) so DRAW_PID stays
+    # DRAW's own pid for the xdotool window search below.
+    ( cd "$DRAW_ROOT" && exec "$DRAW_BIN" --config "$QA_CFG" $DRAW_EXTRA_ARGS $DRAW_TEST_OPTIONS ) > "$DRAW_CONSOLE_LOG" 2>&1 &
     DRAW_PID=$!
 
     info "Waiting for window (up to ${timeout}s) — PID=$DRAW_PID"
@@ -486,4 +502,12 @@ adapter_window_title() {
 
 # adapter_crashlog_dir → where DRAW writes crash reports. DRAW survives a runtime
 # error (FatalError stashes it and RESUME NEXTs), leaving only a report here.
+# NOTE: a crash that recurs inside the render loop never flushes a report file, so
+# this trap alone is incomplete — see adapter_console_log below.
 adapter_crashlog_dir() { echo "$HOME/Desktop/DRAW-log/DRAW-crash-logs"; }
+
+# adapter_console_log → the per-launch capture of DRAW's $CONSOLE output (set in
+# draw_launch). The runner's crash check greps it for QB64 runtime-error lines,
+# which ARE emitted even when no report file is written (e.g. render-loop crashes
+# like the wand-drag "Memory region out of range" #300). Empty until first launch.
+adapter_console_log() { echo "${DRAW_CONSOLE_LOG:-}"; }

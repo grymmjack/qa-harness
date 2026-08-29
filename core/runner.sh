@@ -88,6 +88,22 @@ _crash_snapshot() {
 # Fails if a crash report appeared OR grew since _crash_snapshot.
 assert_no_crash_log() {
     local label="${1:-no runtime errors trapped}"
+
+    # Console-output trap (adapter-provided): some apps survive a runtime error by
+    # RESUME NEXT AND never write a report file for it — e.g. a crash that recurs
+    # inside the render loop. Its only trace is the console line the app prints. If
+    # the adapter exposes a per-launch console log, grep it for runtime-error text.
+    # This catches errors the crash-report-dir snapshot below is structurally blind
+    # to, so it runs FIRST.
+    if declare -F adapter_console_log >/dev/null; then
+        local clog; clog="$(adapter_console_log 2>/dev/null || echo "")"
+        if [[ -n "$clog" && -f "$clog" ]] && grep -qiE 'Runtime error|Memory region out of range|Subscript out of range' "$clog"; then
+            local hit; hit=$(grep -iE 'Runtime error|Memory region out of range|Subscript out of range' "$clog" | head -1)
+            fail "$label — app printed a runtime error: ${hit}"
+            return
+        fi
+    fi
+
     [[ -z "${CRASH_LOG_DIR:-}" ]] && { pass "$label"; return; }
     local n b
     n=$(ls -1 "$CRASH_LOG_DIR" 2>/dev/null | wc -l)
