@@ -316,10 +316,12 @@ canvas_focus() {
 #             7=SHAPE 8=TEXTURE
 open_effect() {
     local cat=$1 child=$2
-    # 2026-08-15: the EFFECTS menu now pins 3 items (Redo/Recall/Blend Last Effect)
-    # + a divider at the TOP, pushing every category down: 3*MENU_ITEM_HEIGHT(12) +
-    # MENU_DIVIDER_HEIGHT(5) = 41px.
-    local top=41
+    # 2026-08-15: the EFFECTS menu pins Redo/Recall/Blend Last Effect + a divider.
+    # 2026-08-31 (BUG-R): two effect-modifier checkboxes — CLIP EFFECT TO SELECTION
+    # and USE SELECTION AS SHAPE — moved from the SELECT menu to the TOP of EFFECTS,
+    # above the last-effect trio. So the pinned block is now 5 items + 1 divider:
+    # 5*MENU_ITEM_HEIGHT(12) + MENU_DIVIDER_HEIGHT(5) = 65px.
+    local top=65
     local caty=$(( 20 + top + cat * 12 ))            # category row centre
     local childy=$(( 22 + top + cat * 12 + child * 12 ))  # child row centre
     click 395 6           # EFFECTS root
