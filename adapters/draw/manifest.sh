@@ -370,6 +370,11 @@ draw_launch() {
     # (truncated) log per launch means a grep of it sees only THIS test's output.
     DRAW_CONSOLE_LOG="${TMPDIR:-/tmp}/draw-qa-console.log"
     : > "$DRAW_CONSOLE_LOG"
+    # Clear any stale developer-mode FIRE log so it is fresh per launch. Without
+    # this a leftover inputs.log from an earlier --developer run makes the
+    # dispatch tests (fire-*) assert against stale content in a NORMAL run instead
+    # of skipping. In --developer runs DRAW recreates it during the test.
+    rm -f "$DRAW_ROOT/inputs.log" 2>/dev/null
     # Launch from DRAW_ROOT, not QA/. DRAW never CHDIRs and resolves some assets
     # against the current directory ("./ASSETS/..."), so running elsewhere breaks
     # palette .GPL previews and friends. Redirect (not tee) so DRAW_PID stays
