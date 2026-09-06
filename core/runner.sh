@@ -505,6 +505,12 @@ qa_main() {
             $(( SECONDS - RUN_T0 )) "$(_suffix_eta "$_i")"
         run_test_file "$f"
         _i=$(( _i + 1 ))
+        # Between-test cleanup hook: gives the adapter a chance to make sure the
+        # just-finished test's app is fully GONE before the next launch, so
+        # instances never overlap and contend for CPU/GPU (which drops inputs and
+        # causes load-induced flakes). Runs BETWEEN tests only — a test that
+        # relaunches the app internally is unaffected.
+        if declare -F adapter_after_test >/dev/null; then adapter_after_test; fi
         sleep 0.5
     done
     KEEP_OPEN=$ORIG_KEEP_OPEN

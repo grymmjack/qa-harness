@@ -482,6 +482,28 @@ draw_settle() {
 }
 adapter_quit() { draw_quit; }
 
+# adapter_after_test — between-test cleanup (called by the runner AFTER each test,
+# never inside one). draw_quit only sends a graceful Ctrl+Q then a single SIGTERM
+# and returns WITHOUT confirming the process died. Under load that let a dying
+# instance overlap the next test's launch — two 30 FPS GPU apps contend for the
+# CPU/GPU and the new instance drops clicks/drags, producing load-induced
+# "regions identical" flakes whose failing set rotates run to run.
+#
+# Wait (bounded) for the just-finished instance's window to be gone, then SIGKILL
+# any orphan process that ignored the quit, so every test starts from a clean
+# single-instance slate. This is SAFE where draw_settle-in-a-test is not: it runs
+# between tests, so a test that relaunches DRAW internally (file-draw-roundtrip,
+# which relies on the quit->launch overlap) never reaches this path.
+adapter_after_test() {
+    [[ "${KEEP_OPEN:-0}" -eq 1 ]] && return   # last test in --keep-open: leave it up
+    draw_settle                                # bounded: until no "DRAW v" window is mapped
+    local pid _me=$$
+    for pid in $(pgrep -f "$DRAW_BIN" 2>/dev/null); do
+        [[ "$pid" == "$_me" ]] && continue
+        kill -9 "$pid" 2>/dev/null
+    done
+}
+
 # ── lifecycle hooks used by the core's crash/window assertions ───────────────
 # adapter_is_alive → 0 if DRAW is still up. Refreshes a stale WID from the pid so
 # the window-title assertion keeps working after e.g. a capture invalidates it.
