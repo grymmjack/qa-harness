@@ -248,13 +248,12 @@ adapter_window_bounds() {
 # Ported from draw-qa.sh draw_focus. Also exposed to tests under that name.
 draw_focus() {
     [[ -z "$DRAW_WID" ]] && return
-    if ! xdotool getwindowname "$DRAW_WID" &>/dev/null; then
+    if ! driver_window_title "$DRAW_WID" &>/dev/null; then
         local new_wid
-        new_wid=$(xdotool search --pid "$DRAW_PID" --name "$WINDOW_TITLE" 2>/dev/null | head -1)
+        new_wid=$(driver_window_find "$DRAW_PID" "$WINDOW_TITLE")
         [[ -n "$new_wid" ]] && DRAW_WID="$new_wid"
     fi
-    xdotool windowactivate --sync "$DRAW_WID" 2>/dev/null
-    xdotool windowfocus --sync "$DRAW_WID" 2>/dev/null
+    driver_window_activate "$DRAW_WID"
     sleep 0.05
 }
 adapter_focus() { draw_focus; }
@@ -269,10 +268,10 @@ wake_draw() {
     draw_focus
     local ax ay
     read -r ax ay <<< "$(adapter_to_screen 50 60)"
-    xdotool mousemove "$ax" "$ay"
-    xdotool mousemove_relative -- 1 0
+    driver_input_move "$ax" "$ay"
+    driver_input_move_rel 1 0
     sleep 0.03
-    xdotool mousemove_relative -- -1 0
+    driver_input_move_rel -1 0
     sleep 0.03
 }
 # Before each dispatched input, match the ORIGINAL draw-qa.sh: its click/drag/key/
@@ -290,8 +289,8 @@ adapter_pre_input() {
     # move is what perturbed mode-sensitive combos (text Ctrl+U, polygon Ctrl+Z).
     # Plain draw_focus alone (no jiggle) left DRAW idle, so drag-paint tests
     # (edit-stroke-selection, layer-group-auto-layer) dropped their stroke.
-    xdotool mousemove_relative -- 1 0 2>/dev/null
-    xdotool mousemove_relative -- -1 0 2>/dev/null
+    driver_input_move_rel 1 0
+    driver_input_move_rel -1 0
 }
 
 # canvas_focus [restore_key] — give DRAW focus by clicking the canvas centre with
@@ -398,7 +397,7 @@ draw_launch() {
     info "Waiting for window (up to ${timeout}s) — PID=$DRAW_PID"
     local i=0
     while [[ $i -lt $(( timeout * 2 )) ]]; do
-        DRAW_WID=$(xdotool search --pid "$DRAW_PID" --name "$WINDOW_TITLE" 2>/dev/null | head -1)
+        DRAW_WID=$(driver_window_find "$DRAW_PID" "$WINDOW_TITLE")
         [[ -n "$DRAW_WID" ]] && break
         sleep 0.5
         i=$(( i + 1 ))
@@ -412,10 +411,9 @@ draw_launch() {
     draw_focus
     sleep 0.3
     info "Positioning window (Meta+Home)..."
-    xdotool windowactivate --sync "$DRAW_WID" 2>/dev/null
-    xdotool windowfocus --sync "$DRAW_WID" 2>/dev/null
+    driver_window_activate "$DRAW_WID"
     sleep 0.2
-    xdotool key --delay 50 super+Home
+    driver_input_seq key super+Home
     sleep 0.5   # let the WM finish the window animation
     _update_win_pos
     info "Window position: ${WIN_ABS_X},${WIN_ABS_Y}"
@@ -458,8 +456,8 @@ _wait_painted() {
 # DRAW binds Meta+Home for this (also done inside draw_launch).
 adapter_park_window() {
     [[ -z "$DRAW_WID" ]] && return
-    xdotool windowactivate --sync "$DRAW_WID" 2>/dev/null
-    xdotool key --delay 50 super+Home
+    driver_window_activate "$DRAW_WID"
+    driver_input_seq key super+Home
     sleep 0.5
     _update_win_pos
 }
@@ -469,8 +467,8 @@ adapter_park_window() {
 # full-desktop screenshots" (which passes for the wrong reason). Fail loudly.
 # Ported from draw-qa.sh _verify_geometry_model.
 _verify_geometry_model() {
-    eval "$(xdotool getwindowgeometry --shell "$DRAW_WID" 2>/dev/null)"
-    local win_w=${WIDTH:-0} win_h=${HEIGHT:-0}
+    local _x _y win_w win_h
+    read -r _x _y win_w win_h <<< "$(driver_window_bounds "$DRAW_WID")"
     local want_w=$(( VIEWPORT_W * DISPLAY_SCALE ))
     local want_h=$(( VIEWPORT_H * DISPLAY_SCALE ))
     local dw=$(( win_w - want_w )); [[ $dw -lt 0 ]] && dw=$(( -dw ))
@@ -497,7 +495,7 @@ draw_quit() {
     fi
     if [[ -n "$DRAW_PID" ]] && kill -0 "$DRAW_PID" 2>/dev/null; then
         info "Closing DRAW (PID $DRAW_PID)..."
-        xdotool key --window "$DRAW_WID" ctrl+q 2>/dev/null || true
+        driver_window_key "$DRAW_WID" ctrl+q || true
         sleep 0.5
         if kill -0 "$DRAW_PID" 2>/dev/null; then
             kill "$DRAW_PID" 2>/dev/null || true
@@ -520,7 +518,7 @@ draw_quit() {
 # is already gone, so those tests must NOT call this and keep the overlap.
 draw_settle() {
     local i=0
-    while [[ $i -lt 60 ]] && [[ -n "$(xdotool search --name "$WINDOW_TITLE" 2>/dev/null)" ]]; do
+    while [[ $i -lt 60 ]] && [[ -n "$(driver_window_find "" "$WINDOW_TITLE")" ]]; do
         sleep 0.1; i=$(( i + 1 ))
     done
 }
@@ -554,18 +552,22 @@ adapter_after_test() {
 adapter_is_alive() {
     [[ -n "$DRAW_PID" ]] || return 1
     kill -0 "$DRAW_PID" 2>/dev/null || return 1
-    if [[ -n "$DRAW_WID" ]] && ! xdotool getwindowname "$DRAW_WID" &>/dev/null; then
+    if [[ -n "$DRAW_WID" ]] && ! driver_window_title "$DRAW_WID" &>/dev/null; then
         local new_wid
-        new_wid=$(xdotool search --pid "$DRAW_PID" --name "$WINDOW_TITLE" 2>/dev/null | head -1)
+        new_wid=$(driver_window_find "$DRAW_PID" "$WINDOW_TITLE")
         [[ -n "$new_wid" ]] && DRAW_WID="$new_wid"
     fi
     return 0
 }
 
 # adapter_window_title → the app window's current title (for assert_window_title).
+# app_window_title / raw_move_in_window — for tests (no OS tool in a test)
+app_window_title() { adapter_window_title; }
+raw_move_in_window() { _update_win_pos; driver_input_move $(( WIN_ABS_X + $1 )) $(( WIN_ABS_Y + DECORATION_H + $2 )); }  # window-relative physical px
+
 adapter_window_title() {
     adapter_is_alive >/dev/null 2>&1
-    xdotool getwindowname "$DRAW_WID" 2>/dev/null || echo ""
+    driver_window_title "$DRAW_WID" || echo ""
 }
 
 # adapter_crashlog_dir → where DRAW writes crash reports. DRAW survives a runtime

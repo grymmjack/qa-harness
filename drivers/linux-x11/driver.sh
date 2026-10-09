@@ -137,6 +137,48 @@ driver_capture_full() {
 }
 
 # ── target / lifecycle ───────────────────────────────────────────────────────
+# ── window handles (the adapter keeps one per app instance) ─────────────────
+# driver_window_find PID TITLE → handle ("" = none). With a PID only that
+# process's windows match; without one, any window with the title.
+driver_window_find() {
+    if [[ -n "${1:-}" ]]; then
+        xdotool search --pid "$1" --name "$2" 2>/dev/null | head -1
+    else
+        xdotool search --name "$2" 2>/dev/null | head -1
+    fi
+}
+driver_window_title()    { xdotool getwindowname "$1" 2>/dev/null; }          # H → title (fails if gone)
+driver_window_activate() { xdotool windowactivate --sync "$1" 2>/dev/null; xdotool windowfocus --sync "$1" 2>/dev/null; return 0; }
+driver_window_bounds() {  # H → "X Y W H" (frame geometry as the WM reports it)
+    local X Y WIDTH HEIGHT
+    eval "$(xdotool getwindowgeometry --shell "$1" 2>/dev/null)"
+    echo "${X:-0} ${Y:-0} ${WIDTH:-0} ${HEIGHT:-0}"
+}
+driver_window_key() { xdotool key --window "$1" "$2" 2>/dev/null; }          # H COMBO → sent to that window
+
+# ── raw input (screen coords) ────────────────────────────────────────────────
+driver_input_move_rel() { xdotool mousemove_relative -- "$1" "$2" 2>/dev/null; }
+# driver_input_seq TOKENS… — an input sequence as ONE atomic batch, for timing-
+# critical gestures (a key tapped while the mouse moves mid-drag). Neutral
+# mini-language: move X Y | moverel DX DY | down B | up B | key K | keydown K | keyup K.
+# X11 sends it as a single xdotool call; drivers without batching run it in order.
+driver_input_seq() {
+    local a=()
+    while (( $# )); do
+        case "$1" in
+            move)    a+=(mousemove "$2" "$3"); shift 3 ;;
+            moverel) a+=(mousemove_relative -- "$2" "$3"); shift 3 ;;
+            down)    a+=(mousedown "$2"); shift 2 ;;
+            up)      a+=(mouseup "$2"); shift 2 ;;
+            key)     a+=(key "$2"); shift 2 ;;
+            keydown) a+=(keydown "$2"); shift 2 ;;
+            keyup)   a+=(keyup "$2"); shift 2 ;;
+            *) echo "driver_input_seq: unknown token '$1'" >&2; return 2 ;;
+        esac
+    done
+    xdotool "${a[@]}"
+}
+
 # driver_window_bounds_by_title <title> [pid] → "X Y W H".
 # X/Y are the CLIENT-area origin from xwininfo's "Absolute upper-left" (which is
 # reparenting-aware — the authoritative answer, and what every click and capture

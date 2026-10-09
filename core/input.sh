@@ -178,3 +178,14 @@ wait_for() {
     info "Waiting ${secs}s — $msg"
     sleep "$secs"
 }
+
+
+# ── raw verbs: SCREEN coordinates (from adapter_to_screen / _abs) ────────────
+# For multi-step gestures a test times itself (hold a key across a drag, press
+# and move without the drag verb's waits). Everything goes through the driver,
+# so tests never call an OS tool (xdotool, cliclick, …) directly.
+raw_move()     { driver_input_move "$1" "$2"; }
+raw_move_rel() { driver_input_move_rel "$1" "$2"; }
+raw_button()   { driver_input_button "$1" "$2"; }      # down|up|click  1|2|3
+raw_key()      { driver_input_key_hold "$1" "$2"; }    # down|up  keyname
+raw_seq()      { driver_input_seq "$@"; }              # atomic: move X Y | down B | up B | key K | keydown K | keyup K | moverel DX DY
