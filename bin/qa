@@ -13,7 +13,12 @@
 set -u
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 
-DRIVER="linux-x11"
+# default driver by OS (override with --driver)
+case "$(uname -s)" in
+    Darwin)                  DRIVER="macos" ;;
+    MINGW*|MSYS*|CYGWIN*)    DRIVER="windows" ;;
+    *)                       DRIVER="linux-x11" ;;
+esac
 ADAPTER=""
 PASS_ARGS=()
 while (( $# )); do

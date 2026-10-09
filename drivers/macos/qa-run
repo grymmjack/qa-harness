@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# drivers/macos/qa-run — run a command inside the logged-in desktop session, as
+# "QA Runner" (its permissions), from anywhere including SSH.
+#   qa-run [--wait] CMD...   write ~/.qa-runner/job.sh and start it; --wait blocks
+#                            and prints the output + exits with the job's code
+#   qa-run --check           are the permissions granted? (lists a window, posts nothing)
+set -uo pipefail
+D="$HOME/.qa-runner"; mkdir -p "$D"
+APP="$HOME/Applications/QA Runner.app"
+wait=0
+[[ "${1:-}" == "--wait" ]] && { wait=1; shift; }
+if [[ "${1:-}" == "--check" ]]; then
+    wait=1
+    set -- bash -c 'w=$("$HOME/.qa-runner/bin/qa-io" find "$(pgrep -x Finder | head -1)" ""); t=$("$HOME/.qa-runner/bin/qa-io" title "$w"); echo "window list: ${w:-NONE}  title: ${t:-(hidden: no Screen Recording)}"; screencapture -x /tmp/qa-check.png && echo "capture: $(stat -f %z /tmp/qa-check.png) bytes"'
+fi
+{
+    echo '#!/opt/homebrew/bin/bash'
+    echo 'G=/opt/homebrew/opt; export PATH="$G/coreutils/libexec/gnubin:$G/gnu-sed/libexec/gnubin:$G/grep/libexec/gnubin:$G/findutils/libexec/gnubin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"'
+    printf 'cd %q\n' "$PWD"
+    printf '%q ' "$@"; echo
+} > "$D/job.sh"
+rm -f "$D/last.exit"
+open -g -a "$APP"
+if (( wait )); then
+    until [[ -f "$D/last.exit" ]]; do sleep 0.5; done
+    cat "$D/last.log"
+    exit "$(cat "$D/last.exit")"
+fi
