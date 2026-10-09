@@ -8,9 +8,8 @@ pixel-editor's QA script and was split along a **driver + adapter seam** so the
 same core runs against a Rust GUI, a C app, a web page — anything you can point
 at and screenshot.
 
-> Status: **skeleton** (Phase 4). The portable pieces are being lifted out of the
-> original `draw-qa.sh` into `core/`; `report/` is already here and app-agnostic.
-> See `ARCHITECTURE.md` for the full seam map and the port checklist.
+> Status: the core is ported out of the original `draw-qa.sh`, with drivers for
+> Linux/X11, macOS and Windows (2026-10). See `ARCHITECTURE.md` for the seam map.
 
 ## Why it exists (the design goals)
 
@@ -39,7 +38,9 @@ DRIVER (per platform)                 ADAPTER (per app — tiny)
   input:  move/click/drag/key/type/scroll   launch/quit · window match
   capture: full-frame → PNG                  logical→screen geometry
   target:  find window · bounds · offscreen  blessed config · hooks(wait/alive)
-  linux-x11 = xdotool + spectacle/scrot + Xvfb    draw / rust-gui / web = adapters
+  linux-x11 = xdotool + scrot + Xvfb               draw / rust-gui / web = adapters
+  macos     = qa-io (C, CoreGraphics) + screencapture
+  windows   = qa-io (C#, SendInput / GDI) in Git Bash
 ```
 
 Tests speak **logical** coordinates; the adapter maps logical→screen. That single
@@ -51,7 +52,9 @@ seam is what lets one test file run against different apps. Full contract:
 | Path | Role |
 |------|------|
 | `core/` | portable bash: runner, assertions, regions/marks, eta, status, report hook, CLI |
-| `drivers/linux-x11/` | the only OS-specific bash: `xdotool` input, `spectacle`/`scrot` capture, `xwininfo` bounds, Xvfb offscreen |
+| `drivers/linux-x11/` | `xdotool` input, `scrot` capture, `xwininfo` bounds, Xvfb offscreen |
+| `drivers/macos/` | `qa-io.c` (CoreGraphics input, window list, Retina px↔pt), `screencapture`, the `QA Runner.app` that holds the permissions, `qa-run` |
+| `drivers/windows/` | `qa-io.cs` (SendInput scan codes, per-monitor DPI-aware pixels, GDI capture, EnumWindows), ImageMagick shims, `qa-run` |
 | `report/qa-report.py` | project-agnostic HTML + JUnit report from a run's TSV (already portable) |
 | `adapters/` | one tiny manifest per app; `adapters/draw/` is the reference adapter |
 | `bin/qa` | entry point: load core + a driver + an adapter manifest, then run |
@@ -84,6 +87,44 @@ QA_RESULTS_DIR=/tmp/runB bin/qa --adapter adapters/kaleidotron --offscreen &
 One caveat is per-adapter, not core: an adapter that pins a fixed app-`HOME`/config
 path must derive it from `QA_RESULTS_DIR` (as the kaleidotron adapter does) or two
 runs of *that* app share one app sandbox.
+
+## Platforms
+
+`bin/qa` picks the driver from `uname` (override with `--driver`). The core and
+the tests are the same everywhere; only `drivers/<os>/` differs, and nothing
+outside it calls an OS tool (DRAW's `qa-no-os-tools-in-tests` guards that).
+macOS and Windows have **no offscreen mode**: a run drives the real desktop, so
+the machine is unusable for its duration.
+
+**macOS** (`drivers/macos/setup.sh` once: Homebrew bash 5, GNU coreutils / sed /
+grep / findutils / awk, ImageMagick; builds `qa-io` and `~/Applications/QA Runner.app`).
+- Grant **QA Runner** Accessibility and Screen Recording once (System Settings >
+  Privacy & Security). The grants follow the app's code signature: rebuilding the
+  app invalidates them, so `setup.sh` only rebuilds it when its source changed.
+- Run through `drivers/macos/qa-run CMD...` (from SSH too): the job runs inside
+  QA Runner in the logged-in session, so it inherits the grants. `--wait` returns
+  its exit code and log; `--check` tests the grants.
+- Coordinates are physical pixels; `qa-io` converts to points (Retina scale 2).
+- Two input faults, both handled by the driver:
+  - an app launched by QA Runner reads as frontmost but gets **no mouse-moved
+    events** until it has been switched away from and back, so every click lands
+    where the pointer last was. `driver_window_ready` does a Cmd+Tab round trip
+    after launch (the AX frontmost flag and `NSRunningApplication activate` do not
+    help);
+  - a drag whose press, moves and release come from **separate processes** is
+    dropped, and input stops reaching the app. `qa-io serve` (started per launch,
+    stopped when the job ends) posts all input; each `qa-io` call forwards to it.
+
+**Windows** (`drivers/windows/setup.sh` builds `qa-io.exe` with the .NET
+Framework `csc`; Git Bash runs the core; a portable ImageMagick 7 lives in
+`C:\qa-runner\imagemagick`, with `convert` / `compare` / `identify` shims).
+- SSH sessions have no desktop: `drivers/windows/qa-run CMD...` writes the job to
+  `C:\qa-runner` and starts it through a Scheduled Task (`/IT`, the desktop user),
+  which runs it hidden in the console session. Everything it needs lives in
+  `C:\qa-runner` because the desktop user can't read the SSH user's profile.
+- Coordinates are physical pixels (qa-io is per-monitor DPI-aware). Keys go out
+  as scan codes: GLFW apps ignore virtual-key-only input.
+- MSYS pids are not Windows pids: the driver converts them (`ps -W`).
 
 ## Adding an app (write an adapter)
 

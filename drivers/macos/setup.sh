@@ -7,7 +7,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 export PATH="/opt/homebrew/bin:$PATH"
 command -v magick >/dev/null || brew install imagemagick
 # the harness speaks GNU userland (sed -i, date -d, grep -P, timeout, stat -c): qa-run puts these first
-for f in coreutils gnu-sed grep findutils gawk; do brew list --versions "$f" >/dev/null 2>&1 || HOMEBREW_NO_AUTO_UPDATE=1 brew install "$f"; done
+for f in bash coreutils gnu-sed grep findutils gawk; do brew list --versions "$f" >/dev/null 2>&1 || HOMEBREW_NO_AUTO_UPDATE=1 brew install "$f"; done
 mkdir -p "$HOME/.qa-runner/bin"
 clang -O2 -o "$HOME/.qa-runner/bin/qa-io" "$HERE/qa-io.c" -framework ApplicationServices -framework CoreFoundation -framework AppKit
 APP="$HOME/Applications/QA Runner.app"
