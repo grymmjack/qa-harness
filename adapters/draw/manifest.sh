@@ -424,9 +424,35 @@ draw_launch() {
     fi
     info "Decoration height: ${DECORATION_H}px"
     _verify_geometry_model
+    _wait_painted 20
     sleep 0.3
 }
 adapter_launch() { draw_launch "$@"; }
+
+# _wait_painted SECS - until DRAW's client area shows real content (more than a
+# handful of colours) and holds still. On a slower host (titan, 2026-10-09)
+# the first snapshot of a test caught the window before its first frames were
+# drawn - one flat grey - and 12 of the first 14 tests failed on that alone.
+_wait_painted() {
+    local limit=${1:-20} t0=$SECONDS tmp n prev="" pos
+    tmp="$(mktemp --suffix=.png 2>/dev/null || echo "/tmp/qa-paint-$$.png")"
+    while (( SECONDS - t0 < limit )); do
+        _update_win_pos
+        pos="$WIN_ABS_X,$WIN_ABS_Y"
+        if _capture_client_area "$tmp" 2>/dev/null; then
+            n=$(identify -format '%k' "$tmp" 2>/dev/null || echo 0)
+            if (( ${n:-0} > 16 )) && [[ "$pos" == "$prev" ]]; then
+                (( SECONDS - t0 > 1 )) && info "Window painted after $(( SECONDS - t0 ))s ($n colours)"
+                rm -f "$tmp"; return 0
+            fi
+        fi
+        prev=$pos
+        sleep 0.4
+    done
+    rm -f "$tmp"
+    warn "DRAW's window still looks blank after ${limit}s - snapshots may be empty"
+    return 0
+}
 
 # adapter_park_window → move+resize the DRAW window to a known desktop rect.
 # DRAW binds Meta+Home for this (also done inside draw_launch).
