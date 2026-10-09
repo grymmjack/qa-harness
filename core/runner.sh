@@ -155,6 +155,7 @@ _fmt_secs() { printf '%d:%02d' $(( $1 / 60 )) $(( $1 % 60 )); }
 # _write_status <phase> <i> <total> <curname> <elapsed_s> <remaining_s>
 _write_status() {
     local phase=$1 i=$2 total=$3 curname=$4 elapsed=$5 remaining=$6
+    [[ "$phase" == "done" ]] && _QA_DONE=1
     mkdir -p "$RESULTS_DIR"
     local now_epoch eta_epoch eta_clock
     now_epoch=$(date +%s)
@@ -239,6 +240,21 @@ run_test_file() {
     else
         _record_result "$name" fail "$_dur" "$LAST_FAIL_MSG"
     fi
+}
+
+# ── early exit: say why ──────────────────────────────────────────────────────
+# A run that ends before its "done" status (the app binary vanished mid-run, a
+# Ctrl+C, an adapter `exit`) used to leave status.json saying "running" - a
+# dashboard could only guess it had stopped. Mark it aborted, with the reason
+# (QA_ABORT_REASON from whoever bailed out, else the exit code).
+_qa_on_exit() {
+    local rc=$? reason
+    adapter_quit
+    [[ "${_QA_DONE:-0}" -eq 1 || ! -f "$STATUS_JSON" ]] && return
+    reason=${QA_ABORT_REASON:-"runner exited (code $rc)"}
+    reason=${reason//\\/\/}; reason=${reason//\"/\'}
+    sed -i "s/\"phase\":\"[a-z]*\"/\"phase\":\"aborted\",\"reason\":\"${reason//\//\\/}\"/" "$STATUS_JSON" 2>/dev/null
+    log "${RED}  ✗ RUN ABORTED — ${reason}${RESET}"
 }
 
 # ── per-test watchdog ─────────────────────────────────────────────────────────
@@ -485,7 +501,8 @@ qa_main() {
 
     command -v driver_check_deps >/dev/null 2>&1 && { driver_check_deps || exit 1; }
     _calibrate_ae
-    trap 'adapter_quit' EXIT INT TERM
+    trap '_qa_on_exit' EXIT
+    trap 'QA_ABORT_REASON="stopped (Ctrl+C / killed)"; exit 130' INT TERM
 
     # Count cached passes for banner
     local _CACHED_COUNT=0

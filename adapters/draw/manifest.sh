@@ -371,6 +371,7 @@ draw_launch() {
     local timeout=${1:-15}
     if [ ! -x "$DRAW_BIN" ]; then
         echo "ERROR: $DRAW_BIN not found or not executable" >&2
+        QA_ABORT_REASON="$DRAW_BIN not found or not executable (rebuilt while the run was using it?)"
         exit 1
     fi
     info "Launching DRAW (--config $(basename "$QA_CFG"))..."
