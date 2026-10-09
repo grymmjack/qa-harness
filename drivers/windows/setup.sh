@@ -7,7 +7,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p /c/qa-runner/bin
 CSC=/c/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe
-"$CSC" /nologo /optimize "/out:$(cygpath -w /c/qa-runner/bin/qa-io.exe)" /r:System.Drawing.dll "$(cygpath -w "$HERE/qa-io.cs")"
+"$CSC" -nologo -optimize "-out:$(cygpath -w /c/qa-runner/bin/qa-io.exe)" -r:System.Drawing.dll "$(cygpath -w "$HERE/qa-io.cs")"
 if [[ ! -x /c/qa-runner/imagemagick/magick.exe ]] && ! ls /c/Program\ Files/ImageMagick*/magick.exe >/dev/null 2>&1; then
     echo "ImageMagick: unpack the portable Q16 x64 build into C:\\qa-runner\\imagemagick" >&2; exit 1
 fi
