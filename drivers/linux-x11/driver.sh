@@ -149,6 +149,7 @@ driver_window_find() {
 }
 driver_window_title()    { xdotool getwindowname "$1" 2>/dev/null; }          # H → title (fails if gone)
 driver_window_activate() { xdotool windowactivate --sync "$1" 2>/dev/null; xdotool windowfocus --sync "$1" 2>/dev/null; return 0; }
+driver_window_ready()    { return 0; }   # macOS-only need (see drivers/macos)
 driver_window_bounds() {  # H → "X Y W H" (frame geometry as the WM reports it)
     local X Y WIDTH HEIGHT
     eval "$(xdotool getwindowgeometry --shell "$1" 2>/dev/null)"

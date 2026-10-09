@@ -18,6 +18,7 @@ fi
     echo 'G=/opt/homebrew/opt; export PATH="$G/coreutils/libexec/gnubin:$G/gnu-sed/libexec/gnubin:$G/grep/libexec/gnubin:$G/findutils/libexec/gnubin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"'
     printf 'cd %q\n' "$PWD"
     printf '%q ' "$@"; echo
+    echo 'rc=$?; "$HOME/.qa-runner/bin/qa-io" stop >/dev/null 2>&1; exit $rc'   # the input server (driver_window_ready) ends with the job
 } > "$D/job.sh"
 rm -f "$D/last.exit"
 open -g -a "$APP"

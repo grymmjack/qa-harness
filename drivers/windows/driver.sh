@@ -60,6 +60,7 @@ driver_capture_full() { "$QA_IO" capture "$(_winpath "$1")" && [[ -s "$1" ]]; }
 driver_window_find()     { local p=""; [[ -n "${1:-}" ]] && p=$(_winpid "$1"); "$QA_IO" find "$p" "$2" 2>/dev/null | tr -d '\r'; }   # MSYS pid -> Windows pid
 driver_window_title()    { "$QA_IO" title "$1" 2>/dev/null | tr -d '\r'; }
 driver_window_activate() { "$QA_IO" activate "$1" 2>/dev/null; return 0; }
+driver_window_ready()    { return 0; }   # macOS-only need (see drivers/macos)
 driver_window_bounds()   { "$QA_IO" client "$1" 2>/dev/null | tr -d '\r'; }   # the CLIENT area
 driver_window_key()      { "$QA_IO" activate "$1" 2>/dev/null; "$QA_IO" key "$2"; }
 

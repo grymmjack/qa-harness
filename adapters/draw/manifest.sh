@@ -443,6 +443,7 @@ draw_launch() {
         exit 1
     fi
     info "Window found: WID=$DRAW_WID"
+    driver_window_ready "$DRAW_WID"
     draw_focus
     sleep 0.3
     info "Positioning window (Meta+Home)..."

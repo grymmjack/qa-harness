@@ -59,6 +59,31 @@ driver_capture_full() { screencapture -x -m -t png "$1" 2>/dev/null && [[ -s "$1
 driver_window_find()     { "$QA_IO" find "${1:-}" "$2" 2>/dev/null; }
 driver_window_title()    { "$QA_IO" title "$1" 2>/dev/null; }
 driver_window_activate() { "$QA_IO" activate "$1" 2>/dev/null; return 0; }
+# driver_window_ready H - once, right after an app's window appears. A GLFW app
+# that another process launched (QA Runner here) reads as frontmost and gets
+# clicks and keys, but NO mouseMoved until it has been deactivated and activated
+# again (macOS 14+ cooperative activation; seen on macOS 26) - so every click
+# lands where the cursor last was. Neither the AX frontmost flag nor
+# NSRunningApplication activate fixes it; Cmd+Tab away and back does, because
+# the window server does that switch itself.
+_qa_io_serve() {
+    "$QA_IO" stop >/dev/null 2>&1
+    ( "$QA_IO" serve >/dev/null 2>&1 & )
+    local i; for (( i = 0; i < 40; i++ )); do "$QA_IO" ping 2>/dev/null && return 0; sleep 0.05; done
+    echo "warning: qa-io serve did not start - input runs per call (drags may fail)" >&2
+}
+_front_pid() { lsappinfo info -only pid "$(lsappinfo front)" 2>/dev/null | sed 's/.*=//'; }
+driver_window_ready() {
+    _qa_io_serve      # one process posts all input from here on (see qa-io.c serve())
+    local pid i; pid=$("$QA_IO" pid "$1" 2>/dev/null) || return 0
+    for i in 1 2 3; do
+        "$QA_IO" key cmd+Tab; sleep 0.8
+        "$QA_IO" key cmd+Tab; sleep 0.8
+        [[ "$(_front_pid)" == "$pid" ]] && return 0
+    done
+    echo "warning: could not switch back to the app (front pid $(_front_pid), app pid $pid)" >&2
+    "$QA_IO" activate "$1" 2>/dev/null; return 0
+}
 driver_window_bounds()   { "$QA_IO" client "$1" 2>/dev/null; }   # the CLIENT area, as the X11 driver reports it
 driver_window_key()      { "$QA_IO" activate "$1" 2>/dev/null; "$QA_IO" key "$2"; }
 

@@ -11,6 +11,8 @@
 //   qa-io move X Y | moverel DX DY | down B | up B | click B      (B: 1 left, 2 middle, 3 right)
 //   qa-io keydown K | keyup K | key COMBO (ctrl+shift+n) | type TEXT
 //   qa-io scroll up|down [N]
+//   qa-io serve | stop | ping   (one long-lived process posts all input - see serve())
+//   qa-io reset                 (forget held buttons / modifiers - kept in ~/.qa-runner/io-state between calls)
 //   qa-io find PID TITLE        -> window id ("" pid = any process)
 //   qa-io title ID | bounds ID (-> "X Y W H" px, frame) | client ID (frame minus the title bar)
 //   qa-io activate ID | pid ID | titlebar (-> px)
@@ -31,6 +33,9 @@
 #include <string.h>
 #include <strings.h>
 #include <unistd.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <sys/time.h>
 
 static double g_scale = 1.0;
 static CGEventSourceRef g_src;
@@ -58,7 +63,29 @@ static CGPoint cur_pt(void) {
     return p;
 }
 
-static CGEventFlags cur_flags(void) { return CGEventSourceFlagsState(kCGEventSourceStateHIDSystemState); }
+// Held buttons and modifiers, kept in a small file between qa-io runs. Each
+// call is its own process, and the HID system state only reflects real
+// hardware - so without this a move after `down 1` went out as a plain
+// mouseMoved (no drag) and a held modifier could drop out of later events.
+static unsigned long st_buttons; static CGEventFlags st_flags; static int st_loaded;
+static const char *st_path(void) {
+    static char p[1024]; const char *h = getenv("HOME");
+    snprintf(p, sizeof p, "%s/.qa-runner/io-state", h ? h : "/tmp"); return p;
+}
+static void st_load(void) {
+    if (st_loaded) return;
+    st_loaded = 1;
+    FILE *f = fopen(st_path(), "r");
+    if (f) { unsigned long long fl = 0; if (fscanf(f, "%lu %llu", &st_buttons, &fl) == 2) st_flags = (CGEventFlags)fl; fclose(f); }
+}
+static void st_save(void) {
+    FILE *f = fopen(st_path(), "w");
+    if (f) { fprintf(f, "%lu %llu\n", st_buttons, (unsigned long long)st_flags); fclose(f); }
+}
+static CGEventFlags cur_flags(void) {
+    st_load();
+    return CGEventSourceFlagsState(kCGEventSourceStateHIDSystemState) | st_flags;
+}
 
 // ── keys ─────────────────────────────────────────────────────────────────────
 typedef struct { const char *name; int code; int shift; } KeyDef;
@@ -113,6 +140,7 @@ static void post_mod(const ModDef *m, int down) {
     CGEventRef e = CGEventCreateKeyboardEvent(g_src, (CGKeyCode)m->code, down);
     CGEventFlags f = cur_flags();
     f = down ? (f | m->mask) : (f & ~m->mask);
+    st_flags = down ? (st_flags | m->mask) : (st_flags & ~m->mask); st_save();
     CGEventSetType(e, kCGEventFlagsChanged);
     CGEventSetFlags(e, f);
     CGEventPost(kCGHIDEventTap, e);
@@ -167,6 +195,10 @@ static void type_text(const char *s) {
 
 // ── mouse ────────────────────────────────────────────────────────────────────
 static int held_button(void) {
+    st_load();
+    if (st_buttons & 1) return 1;
+    if (st_buttons & 4) return 3;
+    if (st_buttons & 2) return 2;
     if (CGEventSourceButtonState(kCGEventSourceStateHIDSystemState, kCGMouseButtonLeft)) return 1;
     if (CGEventSourceButtonState(kCGEventSourceStateHIDSystemState, kCGMouseButtonRight)) return 3;
     if (CGEventSourceButtonState(kCGEventSourceStateHIDSystemState, kCGMouseButtonCenter)) return 2;
@@ -204,6 +236,9 @@ static int button(int b, int down) {
         case 2: t = down ? kCGEventOtherMouseDown : kCGEventOtherMouseUp; mb = kCGMouseButtonCenter; break;
         default: fprintf(stderr, "qa-io: button %d?\n", b); return 2;
     }
+    st_load();
+    unsigned long bit = 1UL << (b - 1);
+    st_buttons = down ? (st_buttons | bit) : (st_buttons & ~bit); st_save();
     CGEventRef e = CGEventCreateMouseEvent(NULL, t, cur_pt(), mb);
     CGEventSetIntegerValueField(e, kCGMouseEventClickState, 1);   // a single click (0 = not a click for AppKit)
     CGEventSetFlags(e, cur_flags());
@@ -307,9 +342,17 @@ static long win_pid(long id) {
     CFRelease(a); return p;
 }
 
-static int cmd_activate(long id) {
-    long pid = win_pid(id);
+static int cmd_activate(long wid) {
+    long pid = win_pid(wid);
     if (!pid) return 1;
+    // LaunchServices activation, not just the AX frontmost flag: a GLFW app
+    // spawned by QA Runner reads as frontmost but gets NO mouseMoved events (so
+    // clicks land wherever the cursor last was) until it is activated this way.
+    typedef id (*AppFn)(id, SEL, int);
+    typedef BOOL (*ActFn)(id, SEL, unsigned long);
+    id ra = ((AppFn)objc_msgSend)((id)objc_getClass("NSRunningApplication"),
+                                  sel_registerName("runningApplicationWithProcessIdentifier:"), (int)pid);
+    if (ra) ((ActFn)objc_msgSend)(ra, sel_registerName("activateWithOptions:"), 1UL | 2UL);  // all windows | ignoring other apps
     AXUIElementRef app = AXUIElementCreateApplication((pid_t)pid);
     AXUIElementSetAttributeValue(app, kAXFrontmostAttribute, kCFBooleanTrue);
     CFRelease(app);
@@ -328,18 +371,18 @@ static int run_seq(int argc, char **argv) {
         else if (!strcmp(t, "key") && i + 1 < argc)      { key_combo(argv[i+1]); i += 2; }
         else if (!strcmp(t, "keydown") && i + 1 < argc)  { key_updown(argv[i+1], 1, 0); i += 2; }
         else if (!strcmp(t, "keyup") && i + 1 < argc)    { key_updown(argv[i+1], 0, 0); i += 2; }
+        else if (!strcmp(t, "sleep") && i + 1 < argc)    { ms(atoi(argv[i+1])); i += 2; }
         else { fprintf(stderr, "qa-io seq: bad token '%s'\n", t); return 2; }
         ms(8);
     }
     return 0;
 }
 
-int main(int argc, char **argv) {
-    if (argc < 2) { fprintf(stderr, "usage: qa-io CMD ... (see the header)\n"); return 2; }
-    g_scale = display_scale();
-    g_src = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
+static int dispatch(int argc, char **argv) {
     const char *c = argv[1];
     if (!strcmp(c, "scale"))    { printf("%g\n", g_scale); return 0; }
+    if (!strcmp(c, "noop"))     return 0;
+    if (!strcmp(c, "reset"))    { st_buttons = 0; st_flags = 0; st_save(); return 0; }   // forget held buttons / modifiers
     if (!strcmp(c, "where"))    { CGPoint p = cur_pt(); printf("%ld %ld\n", (long)(p.x * g_scale + .5), (long)(p.y * g_scale + .5)); return 0; }
     if (!strcmp(c, "trusted"))  { printf("%d\n", AXIsProcessTrusted() ? 1 : 0); return 0; }
     if (!strcmp(c, "request")) {  // ask macOS to prompt for both grants (for the app that runs us)
@@ -369,4 +412,74 @@ int main(int argc, char **argv) {
     if (!strcmp(c, "seq"))                  return run_seq(argc - 2, argv + 2);
     fprintf(stderr, "qa-io: unknown command '%s'\n", c);
     return 2;
+}
+
+// ── serve ────────────────────────────────────────────────────────────────────
+// macOS drops a drag whose press, moves and release come from DIFFERENT
+// processes: after `qa-io down 1` exits, the next process's dragged / up events
+// never reach the app, and nothing does until the session recovers. So input
+// is posted by ONE long-lived process: `qa-io serve` listens on a Unix socket
+// and every input command (move, down, up, key, ...) is forwarded to it when it
+// is running; without a server the command runs locally as before.
+static const char *sock_path(void) {
+    const char *e = getenv("QA_IO_SOCK");
+    if (e && *e) return e;
+    static char p[1024]; const char *h = getenv("HOME");
+    snprintf(p, sizeof p, "%s/.qa-runner/io.sock", h ? h : "/tmp"); return p;
+}
+static int is_input_cmd(const char *c) {
+    static const char *in[] = { "move", "moverel", "down", "up", "click", "keydown", "keyup",
+                                "key", "type", "scroll", "seq", "reset", "noop", NULL };
+    for (int i = 0; in[i]; i++) if (!strcmp(c, in[i])) return 1;
+    return 0;
+}
+static int sock_addr(struct sockaddr_un *a) {
+    memset(a, 0, sizeof *a); a->sun_family = AF_UNIX;
+    if (strlen(sock_path()) >= sizeof a->sun_path) return 0;
+    strcpy(a->sun_path, sock_path()); return 1;
+}
+// -1 = no server (run locally), else the server's exit code
+static int forward(int argc, char **argv) {
+    struct sockaddr_un a; if (!sock_addr(&a)) return -1;
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0); if (fd < 0) return -1;
+    if (connect(fd, (struct sockaddr *)&a, sizeof a) != 0) { close(fd); return -1; }
+    struct timeval tv = { 60, 0 }; setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+    for (int i = 1; i < argc; i++) { size_t n = strlen(argv[i]) + 1; if (write(fd, argv[i], n) != (ssize_t)n) { close(fd); return 2; } }
+    shutdown(fd, SHUT_WR);
+    unsigned char rc = 2; if (read(fd, &rc, 1) != 1) rc = 2;
+    close(fd); return rc;
+}
+static int serve(void) {
+    struct sockaddr_un a; if (!sock_addr(&a)) { fprintf(stderr, "qa-io: socket path too long\n"); return 2; }
+    unlink(a.sun_path);
+    int s = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (s < 0 || bind(s, (struct sockaddr *)&a, sizeof a) != 0 || listen(s, 8) != 0) { perror("qa-io serve"); return 2; }
+    st_buttons = 0; st_flags = 0; st_save(); st_loaded = 1;   // a fresh server: nothing held
+    static char buf[65536];
+    for (;;) {
+        int c = accept(s, NULL, NULL); if (c < 0) continue;
+        size_t len = 0; ssize_t r;
+        while (len < sizeof buf - 1 && (r = read(c, buf + len, sizeof buf - 1 - len)) > 0) len += (size_t)r;
+        buf[len] = 0;
+        char *av[256]; int ac = 0; av[ac++] = "qa-io";
+        for (size_t i = 0; i < len && ac < 255; ) { av[ac++] = buf + i; i += strlen(buf + i) + 1; }
+        av[ac] = NULL;
+        unsigned char rc = 2;
+        if (ac >= 2 && !strcmp(av[1], "quit")) { rc = 0; if (write(c, &rc, 1)) {} close(c); break; }
+        if (ac >= 2 && is_input_cmd(av[1])) rc = (unsigned char)dispatch(ac, av);
+        if (write(c, &rc, 1)) {}
+        close(c);
+    }
+    close(s); return 0;   // no unlink: a successor may already own the path
+}
+
+int main(int argc, char **argv) {
+    if (argc < 2) { fprintf(stderr, "usage: qa-io CMD ... (see the header)\n"); return 2; }
+    if (is_input_cmd(argv[1])) { int r = forward(argc, argv); if (r >= 0) return r; }
+    else if (!strcmp(argv[1], "ping")) { char *q[] = { argv[0], "noop" }; return forward(2, q) >= 0 ? 0 : 1; }   // 0 = a server is running
+    else if (!strcmp(argv[1], "stop")) { char *q[] = { argv[0], "quit" }; return forward(2, q) >= 0 ? 0 : 1; }
+    g_scale = display_scale();
+    g_src = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
+    if (!strcmp(argv[1], "serve")) return serve();
+    return dispatch(argc, argv);
 }
