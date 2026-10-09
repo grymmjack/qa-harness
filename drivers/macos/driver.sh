@@ -75,5 +75,8 @@ driver_window_bounds_by_title() {
 # The client origin already sits below the title bar, so no extra offset.
 driver_detect_decoration_height() { echo 0; }
 
+# physical pixels per point of the main screen (macOS Retina = 2)
+driver_backing_scale() { "$QA_IO" scale | cut -d. -f1; }   # 2 on Retina
+
 driver_offscreen_available() { return 1; }
 driver_run_offscreen() { echo "macOS has no offscreen mode" >&2; return 1; }

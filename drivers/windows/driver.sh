@@ -57,7 +57,7 @@ driver_input_seq()      { "$QA_IO" seq "$@"; }
 driver_capture_full() { "$QA_IO" capture "$(_winpath "$1")" && [[ -s "$1" ]]; }
 
 # ── windows (HWND as a decimal number) ───────────────────────────────────────
-driver_window_find()     { "$QA_IO" find "${1:-}" "$2" 2>/dev/null | tr -d '\r'; }
+driver_window_find()     { local p=""; [[ -n "${1:-}" ]] && p=$(_winpid "$1"); "$QA_IO" find "$p" "$2" 2>/dev/null | tr -d '\r'; }   # MSYS pid -> Windows pid
 driver_window_title()    { "$QA_IO" title "$1" 2>/dev/null | tr -d '\r'; }
 driver_window_activate() { "$QA_IO" activate "$1" 2>/dev/null; return 0; }
 driver_window_bounds()   { "$QA_IO" client "$1" 2>/dev/null | tr -d '\r'; }   # the CLIENT area
@@ -68,12 +68,16 @@ _winpid() { local w; w=$(ps -W 2>/dev/null | awk -v p="$1" '$1 == p {print $4; e
 
 driver_window_bounds_by_title() {
     local title=$1 pid=${2:-} wid=""
-    [[ -n "$pid" ]] && wid=$(driver_window_find "$(_winpid "$pid")" "$title")
+    [[ -n "$pid" ]] && wid=$(driver_window_find "$pid" "$title")
     [[ -z "$wid" ]] && wid=$(driver_window_find "" "$title")
     [[ -z "$wid" ]] && return 1
     driver_window_bounds "$wid"
 }
 driver_detect_decoration_height() { echo 0; }   # client origin already below the title bar
+
+# physical pixels per point of the main screen (macOS Retina = 2)
+driver_backing_scale() { echo 1; }   # qa-io is DPI-aware: physical pixels
+driver_content_scale() { "$QA_IO" scale; }   # monitor scale, 2.5 at 250%
 
 driver_offscreen_available() { return 1; }
 driver_run_offscreen() { echo "Windows has no offscreen mode" >&2; return 1; }

@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
-# ImageMagick 7 legacy name -> magick (Windows has its own unrelated convert.exe)
-exec magick convert "$@"
+# ImageMagick 7 legacy name -> magick (Windows has its own unrelated convert.exe).
+# Plain `magick` takes convert's arguments; this portable build rejects `magick convert`.
+exec magick "$@"

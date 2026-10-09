@@ -212,6 +212,9 @@ driver_window_bounds_by_title() {
 # DECORATION_H=<physical px> for a WM where xwininfo reports the frame instead.
 driver_detect_decoration_height() { echo 0; }
 
+# physical pixels per point of the main screen (macOS Retina = 2)
+driver_backing_scale() { echo 1; }
+
 driver_offscreen_available() { command -v xvfb-run &>/dev/null && command -v Xvfb &>/dev/null; }
 
 # driver_run_offscreen <cmd...> — run a command under a virtual X display.

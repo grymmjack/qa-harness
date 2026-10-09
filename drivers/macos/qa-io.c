@@ -25,6 +25,7 @@
 #include <objc/message.h>
 #include <objc/runtime.h>
 #include <CoreFoundation/CoreFoundation.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -178,10 +179,21 @@ static void mouse_at(CGPoint p) {
     if (b == 1) t = kCGEventLeftMouseDragged;
     else if (b == 3) { t = kCGEventRightMouseDragged; mb = kCGMouseButtonRight; }
     else if (b == 2) { t = kCGEventOtherMouseDragged; mb = kCGMouseButtonCenter; }
-    CGEventRef e = CGEventCreateMouseEvent(g_src, t, p, mb);
+    // a real move event WITH its delta - apps (GLFW: the cursor-position
+    // callback) track the pointer from these; a warp alone sends no event and a
+    // zero-delta move after a warp can be dropped, leaving the app's idea of the
+    // pointer stale (the click then lands where the app last saw it)
+    CGPoint from = cur_pt();
+    CGEventRef e = CGEventCreateMouseEvent(NULL, t, p, mb);   // no source, as cliclick does
+    CGEventSetIntegerValueField(e, kCGMouseEventDeltaX, (int64_t)(p.x - from.x));
+    CGEventSetIntegerValueField(e, kCGMouseEventDeltaY, (int64_t)(p.y - from.y));
     CGEventSetFlags(e, cur_flags());
     CGEventPost(kCGHIDEventTap, e);
     CFRelease(e);
+    // if the cursor itself did not follow, place it (the app already has the event)
+    usleep(4000);
+    CGPoint now = cur_pt();
+    if (fabs(now.x - p.x) > 0.5 || fabs(now.y - p.y) > 0.5) CGWarpMouseCursorPosition(p);
 }
 
 static int button(int b, int down) {
@@ -192,7 +204,8 @@ static int button(int b, int down) {
         case 2: t = down ? kCGEventOtherMouseDown : kCGEventOtherMouseUp; mb = kCGMouseButtonCenter; break;
         default: fprintf(stderr, "qa-io: button %d?\n", b); return 2;
     }
-    CGEventRef e = CGEventCreateMouseEvent(g_src, t, cur_pt(), mb);
+    CGEventRef e = CGEventCreateMouseEvent(NULL, t, cur_pt(), mb);
+    CGEventSetIntegerValueField(e, kCGMouseEventClickState, 1);   // a single click (0 = not a click for AppKit)
     CGEventSetFlags(e, cur_flags());
     CGEventPost(kCGHIDEventTap, e);
     CFRelease(e);
@@ -329,6 +342,13 @@ int main(int argc, char **argv) {
     if (!strcmp(c, "scale"))    { printf("%g\n", g_scale); return 0; }
     if (!strcmp(c, "where"))    { CGPoint p = cur_pt(); printf("%ld %ld\n", (long)(p.x * g_scale + .5), (long)(p.y * g_scale + .5)); return 0; }
     if (!strcmp(c, "trusted"))  { printf("%d\n", AXIsProcessTrusted() ? 1 : 0); return 0; }
+    if (!strcmp(c, "request")) {  // ask macOS to prompt for both grants (for the app that runs us)
+        const void *k[] = { kAXTrustedCheckOptionPrompt }; const void *v[] = { kCFBooleanTrue };
+        CFDictionaryRef o = CFDictionaryCreate(NULL, k, v, 1, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+        int ax = AXIsProcessTrustedWithOptions(o); CFRelease(o);
+        int sr = CGRequestScreenCaptureAccess();
+        printf("accessibility=%d screen=%d\n", ax ? 1 : 0, sr ? 1 : 0); return 0;
+    }
     if (!strcmp(c, "move") && argc >= 4)    { mouse_at(px_to_pt(atof(argv[2]), atof(argv[3]))); return 0; }
     if (!strcmp(c, "moverel") && argc >= 4) { CGPoint p = cur_pt(); p.x += atof(argv[2]) / g_scale; p.y += atof(argv[3]) / g_scale; mouse_at(p); return 0; }
     if (!strcmp(c, "down") && argc >= 3)    return button(atoi(argv[2]), 1);
