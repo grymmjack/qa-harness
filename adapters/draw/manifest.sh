@@ -395,7 +395,13 @@ adapter_pre_launch() {
     [[ -n "$line" ]] || return 0
     line=${line#*QA-OPTIONS:}
     for kv in $line; do
-        [[ "$kv" == *=* ]] && DRAW_TEST_OPTIONS+=" --option $kv"
+        [[ "$kv" == *=* ]] || continue
+        # [Windows] DRAW runs *_COMMAND through cmd.exe, which runs neither a .sh
+        # nor a forward-slash path: use the fixture's .cmd twin, backslashed.
+        if [[ -n "$QA_WIN_SCALE" && "$kv" == *_COMMAND=*.sh ]]; then
+            local v=${kv#*=}; v=${v%.sh}.cmd; kv="${kv%%=*}=${v//\//\\}"
+        fi
+        DRAW_TEST_OPTIONS+=" --option $kv"
     done
     [[ -n "$DRAW_TEST_OPTIONS" ]] && info "Per-test DRAW options:${DRAW_TEST_OPTIONS}"
 }
