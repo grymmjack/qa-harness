@@ -22,6 +22,9 @@ ADAPTER_TESTS_DIR="$DRAW_ROOT/QA/tests"     # absolute — DRAW's tests live in 
 WINDOW_TITLE="DRAW v"
 DRAW_PID=""
 DRAW_WID=""
+# app state a test can change (a relaunch) - handed back from the watchdog's
+# per-test subshell to the runner (core/runner.sh _run_test_guarded)
+ADAPTER_STATE_VARS="DRAW_PID DRAW_WID"
 DRAW_EXTRA_ARGS="${DRAW_EXTRA_ARGS:-}"
 # Per-test DRAW --option overrides, computed from a test file's `# QA-OPTIONS:`
 # line by adapter_pre_launch. Reset each test so options never leak forward.

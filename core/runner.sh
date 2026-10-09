@@ -221,9 +221,8 @@ run_test_file() {
     if declare -F adapter_pre_launch >/dev/null; then adapter_pre_launch "$test_file"; fi
     _crash_snapshot
     adapter_launch 15
-    # Source directly in the current shell — pid/wid/counters all shared.
-    # shellcheck disable=SC1090
-    source "$test_file"
+    # Run it under a watchdog (a hung test must never leave the run in limbo).
+    _run_test_guarded "$test_file" "$name"
     # Trapped runtime errors leave the app running, so this is the only automatic
     # signal that something raised during the test.
     assert_no_crash_log "$name — no runtime errors trapped"
@@ -239,6 +238,69 @@ run_test_file() {
         _record_result "$name" pass "$_dur" ""
     else
         _record_result "$name" fail "$_dur" "$LAST_FAIL_MSG"
+    fi
+}
+
+# ── per-test watchdog ─────────────────────────────────────────────────────────
+# A test is sourced into a SUBSHELL so it can be killed: a hung step (an app
+# stuck behind a dialog, an input call that never returns, a wait loop on a
+# condition that never comes) used to hang the whole run forever - the status
+# file stopped moving and nothing ever ended it (one run sat 30 min in a test).
+# Past its limit the subshell's whole process tree is killed, the test FAILs
+# "timed out", and the run goes on (adapter_quit / adapter_after_test clean up
+# the app). The test's counters and the adapter's app state come back through a
+# state file, so pass/fail tallies, LAST_FAIL_MSG and relaunched app pids survive.
+#   limit: `# QA-TIMEOUT: <seconds>` in the test's header, else $QA_TEST_TIMEOUT
+#   (default 600s - the slowest normal test takes ~4 min).
+QA_TEST_TIMEOUT=${QA_TEST_TIMEOUT:-600}
+_STATE_VARS="PASS FAIL SKIP LAST_FAIL_MSG SNAP_SEQ"
+
+_test_timeout_for() {
+    local t
+    t=$(sed -n '2,40{ s/^# QA-TIMEOUT: *\([0-9][0-9]*\).*/\1/p; }' "$1" | head -1)
+    echo "${t:-$QA_TEST_TIMEOUT}"
+}
+
+_kill_tree() {   # _kill_tree PID [SIG] - children first, then the pid
+    local pid=$1 sig=${2:-TERM} c
+    for c in $(pgrep -P "$pid" 2>/dev/null); do _kill_tree "$c" "$sig"; done
+    kill "-$sig" "$pid" 2>/dev/null
+}
+
+_run_test_guarded() {
+    local test_file=$1 name=$2 limit state tpid t0 timed_out=0 fail0=$FAIL
+    limit=$(_test_timeout_for "$test_file")
+    state=$(mktemp "${TMPDIR:-/tmp}/qa-state.XXXXXX")
+    (
+        # shellcheck disable=SC2064
+        trap "declare -p $_STATE_VARS ${ADAPTER_STATE_VARS:-} > '$state' 2>/dev/null" EXIT
+        # shellcheck disable=SC1090
+        source "$test_file"
+    ) &
+    tpid=$!
+    t0=$SECONDS
+    while kill -0 "$tpid" 2>/dev/null; do
+        if (( SECONDS - t0 >= limit )); then
+            timed_out=1
+            _kill_tree "$tpid" TERM
+            sleep 1
+            _kill_tree "$tpid" KILL
+            break
+        fi
+        sleep 0.2
+    done
+    wait "$tpid" 2>/dev/null
+    # back into the runner's globals (declare -p output would be local in here)
+    # shellcheck disable=SC1090
+    [[ -s "$state" ]] && source <(sed 's/^declare /declare -g /' "$state")
+    rm -f "$state"
+    if (( timed_out )); then
+        fail "$name — TIMED OUT after ${limit}s (killed; the run goes on). Raise it with '# QA-TIMEOUT: <s>' if the test is legitimately long"
+    fi
+    # --fail-fast: a failure inside the subshell only ended the subshell
+    if [[ $FAIL_FAST -eq 1 && $FAIL -gt $fail0 ]]; then
+        adapter_quit
+        exit 1
     fi
 }
 
