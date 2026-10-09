@@ -207,7 +207,10 @@ driver_run_offscreen() {
     local res="${QA_XVFB_RES:-}"
     if [[ -z "$res" ]]; then
         command -v xdotool &>/dev/null && res=$(xdotool getdisplaygeometry 2>/dev/null) && res="${res// /x}"
-        [[ -z "$res" ]] && res="1920x1080"
+        # no display to copy (over SSH): big enough for a 2x-scaled QA geometry -
+        # apps cap their window to a share of the screen (DRAW: 90%), so 1920x1080
+        # made DRAW's 958x514@2x window 1728x972 and the run refused to start
+        [[ -z "$res" ]] && res="3840x2160"
     fi
     local wm="${QA_OFFSCREEN_WM:-openbox}"
     # Respect a caller-supplied rc; otherwise use the bundled undecorated one.
