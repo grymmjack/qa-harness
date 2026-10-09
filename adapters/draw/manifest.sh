@@ -180,6 +180,9 @@ fi
 # LAYER_PANEL_render sets panelY% = 0 — anchored to the TOP of the window.
 LP_Y=0
 LP_W=$LAYER_PANEL_W
+# menu-bar x offset vs the 100px layer panel the fixed menu coordinates were
+# measured with (the menu bar starts where the left, full-height layers end)
+MENU_DX=$(( LAYER_PANEL_W - 100 ))
 LP_H=$(( VIEWPORT_H - MENU_BAR_H - STATUS_H - PALETTE_H ))
 
 # Aliases used by new-layer.sh
@@ -328,11 +331,13 @@ open_effect() {
     local top=65
     local caty=$(( 20 + top + cat * 12 ))            # category row centre
     local childy=$(( 22 + top + cat * 12 + child * 12 ))  # child row centre
-    click 395 6           # EFFECTS root
+    # x measured with the 100px layer panel docked LEFT (full height): the menu
+    # bar starts where it ends, so shift by MENU_DX for the pinned width
+    click $(( 395 + MENU_DX )) 6           # EFFECTS root
     sleep 0.25
-    click 420 "$caty"     # category row -> opens flyout
+    click $(( 420 + MENU_DX )) "$caty"     # category row -> opens flyout
     sleep 0.25
-    click 560 "$childy"   # child effect (flyout moved right — wide pinned labels)
+    click $(( 560 + MENU_DX )) "$childy"   # child effect (flyout moved right — wide pinned labels)
     sleep 0.3
 }
 
