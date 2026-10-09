@@ -37,6 +37,9 @@ QA_CFG="$DRAW_ROOT/QA/DRAW.qa.cfg"
 # UI_SCALE MUST stay 0 (SCREEN_init only honors an explicit SCREEN_WIDTH/HEIGHT in
 # pure Auto mode); with a UI_SCALE master set, DRAW re-derives the viewport from
 # desktop/scale and the model below stops matching.
+# STOCK_DEFAULT_LAYOUT=0: the dock tests arrange panels in Default and read the
+# result from this file (DRAW's default 1 would ask for a workspace name instead;
+# tests/workspace-stock-default.sh turns it on for itself).
 _qa_cfg_overrides() {
     cat <<'OVERRIDES'
 UI_SCALE=0
@@ -57,6 +60,7 @@ PALETTE_MAX_ROWS=3
 PALETTE_MIN_ROWS=1
 SOUNDS_ENABLED=FALSE
 MUSIC_ENABLED=FALSE
+STOCK_DEFAULT_LAYOUT=0
 OVERRIDES
 }
 
