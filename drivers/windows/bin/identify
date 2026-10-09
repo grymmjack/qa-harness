@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# ImageMagick 7 legacy name -> magick (Windows has its own unrelated convert.exe)
+exec magick identify "$@"

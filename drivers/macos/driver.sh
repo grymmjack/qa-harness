@@ -59,26 +59,20 @@ driver_capture_full() { screencapture -x -m -t png "$1" 2>/dev/null && [[ -s "$1
 driver_window_find()     { "$QA_IO" find "${1:-}" "$2" 2>/dev/null; }
 driver_window_title()    { "$QA_IO" title "$1" 2>/dev/null; }
 driver_window_activate() { "$QA_IO" activate "$1" 2>/dev/null; return 0; }
-driver_window_bounds()   { "$QA_IO" bounds "$1" 2>/dev/null; }
+driver_window_bounds()   { "$QA_IO" client "$1" 2>/dev/null; }   # the CLIENT area, as the X11 driver reports it
 driver_window_key()      { "$QA_IO" activate "$1" 2>/dev/null; "$QA_IO" key "$2"; }
 
-# driver_window_bounds_by_title <title> [pid] → "X Y W H" of the CLIENT area.
-# CGWindow bounds are the frame; the client area is its bottom part (the title
-# bar is on top), so the origin moves down by the decoration height.
+# driver_window_bounds_by_title <title> [pid] → "X Y W H" of the CLIENT area
+# (qa-io client: the frame minus the title bar, whose height qa-io asks AppKit).
 driver_window_bounds_by_title() {
-    local title=$1 pid=${2:-} wid="" x y w h d
+    local title=$1 pid=${2:-} wid=""
     [[ -n "$pid" ]] && wid=$(driver_window_find "$pid" "$title")
     [[ -z "$wid" ]] && wid=$(driver_window_find "" "$title")
     [[ -z "$wid" ]] && return 1
-    read -r x y w h <<< "$(driver_window_bounds "$wid")"
-    d=$(_mac_titlebar_px)
-    echo "$x $(( y + d )) $w $(( h - d ))"
+    driver_window_bounds "$wid"
 }
 
-# The title bar's height in pixels (28pt on current macOS; DECORATION_H_MAC=<px>
-# overrides). driver_window_bounds_by_title already returns the CLIENT origin,
-# so the adapter's own decoration offset stays 0.
-_mac_titlebar_px() { echo "${DECORATION_H_MAC:-$(( 28 * $("$QA_IO" scale | cut -d. -f1) ))}"; }
+# The client origin already sits below the title bar, so no extra offset.
 driver_detect_decoration_height() { echo 0; }
 
 driver_offscreen_available() { return 1; }

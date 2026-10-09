@@ -11,7 +11,7 @@ wait=0
 [[ "${1:-}" == "--wait" ]] && { wait=1; shift; }
 if [[ "${1:-}" == "--check" ]]; then
     wait=1
-    set -- bash -c 'w=$("$HOME/.qa-runner/bin/qa-io" find "$(pgrep -x Finder | head -1)" ""); t=$("$HOME/.qa-runner/bin/qa-io" title "$w"); echo "window list: ${w:-NONE}  title: ${t:-(hidden: no Screen Recording)}"; screencapture -x /tmp/qa-check.png && echo "capture: $(stat -f %z /tmp/qa-check.png) bytes"'
+    set -- bash -c 'w=$("$HOME/.qa-runner/bin/qa-io" find "$(pgrep -x Finder | head -1)" ""); t=$("$HOME/.qa-runner/bin/qa-io" title "$w"); echo "window list: ${w:-NONE}  title: ${t:-(hidden: no Screen Recording)}"; echo "input allowed (Accessibility): $("$HOME/.qa-runner/bin/qa-io" trusted)"; screencapture -x /tmp/qa-check.png && echo "capture: $(wc -c < /tmp/qa-check.png) bytes"'
 fi
 {
     echo '#!/opt/homebrew/bin/bash'

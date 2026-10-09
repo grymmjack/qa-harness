@@ -13,7 +13,10 @@ DRAW_ROOT="${DRAW_ROOT:-/home/grymmjack/git/DRAW}"
 # Overridable so a scratch/alternate binary can be exercised without disturbing
 # the tree's DRAW.run (e.g. validating a crash trap against a deliberately-broken
 # build). Still launched from DRAW_ROOT so asset paths resolve.
-DRAW_BIN="${DRAW_BIN:-$DRAW_ROOT/DRAW.run}"
+case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) DRAW_BIN="${DRAW_BIN:-$DRAW_ROOT/DRAW.exe}" ;;
+    *)                    DRAW_BIN="${DRAW_BIN:-$DRAW_ROOT/DRAW.run}" ;;
+esac
 
 # ── 1. Identity ──────────────────────────────────────────────────────────────
 ADAPTER_NAME="${QA_PROJECT:-DRAW}"          # report title / project name

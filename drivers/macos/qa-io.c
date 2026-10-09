@@ -12,15 +12,18 @@
 //   qa-io keydown K | keyup K | key COMBO (ctrl+shift+n) | type TEXT
 //   qa-io scroll up|down [N]
 //   qa-io find PID TITLE        -> window id ("" pid = any process)
-//   qa-io title ID | bounds ID (-> "X Y W H" px, frame) | activate ID | pid ID
+//   qa-io title ID | bounds ID (-> "X Y W H" px, frame) | client ID (frame minus the title bar)
+//   qa-io activate ID | pid ID | titlebar (-> px)
 //   qa-io seq TOKENS...         (move X Y, moverel DX DY, down B, up B, key K, keydown K, keyup K)
 //   qa-io scale                 -> backing scale of the main display
 //
 // Needs Accessibility (events, activate) and Screen Recording (window titles)
 // for the process that runs it - see drivers/macos/README.md.
 //
-// Build: clang -O2 -o qa-io qa-io.c -framework ApplicationServices -framework CoreFoundation
+// Build: clang -O2 -o qa-io qa-io.c -framework ApplicationServices -framework CoreFoundation -framework AppKit
 #include <ApplicationServices/ApplicationServices.h>
+#include <objc/message.h>
+#include <objc/runtime.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -251,6 +254,30 @@ static int cmd_title(long id) {
     CFRelease(a); return 0;
 }
 
+// The standard title bar's height in points, from AppKit itself
+// (+[NSWindow frameRectForContentRect:styleMask:] for a titled window) - it
+// changes between macOS versions (28pt, 32pt on macOS 26).
+static double titlebar_pt(void) {
+    typedef CGRect (*FrFn)(id, SEL, CGRect, unsigned long);
+    Class cls = objc_getClass("NSWindow");
+    if (!cls) return 28.0;
+    CGRect fr = ((FrFn)objc_msgSend)((id)cls, sel_registerName("frameRectForContentRect:styleMask:"),
+                                     CGRectMake(0, 0, 100, 100), (unsigned long)(1 | 2 | 4));
+    double tb = fr.size.height - 100.0;
+    return tb > 0 && tb < 200 ? tb : 28.0;
+}
+
+static int cmd_client(long id) {
+    CFArrayRef a = win_list(); CFDictionaryRef d = find_win(a, id);
+    if (!d) { CFRelease(a); puts("0 0 0 0"); return 1; }
+    CGRect r; CFDictionaryRef b = CFDictionaryGetValue(d, kCGWindowBounds);
+    CGRectMakeWithDictionaryRepresentation(b, &r);
+    double tb = titlebar_pt();
+    printf("%ld %ld %ld %ld\n", (long)(r.origin.x * g_scale + .5), (long)((r.origin.y + tb) * g_scale + .5),
+           (long)(r.size.width * g_scale + .5), (long)((r.size.height - tb) * g_scale + .5));
+    CFRelease(a); return 0;
+}
+
 static int cmd_bounds(long id) {
     CFArrayRef a = win_list(); CFDictionaryRef d = find_win(a, id);
     if (!d) { CFRelease(a); puts("0 0 0 0"); return 1; }
@@ -300,6 +327,8 @@ int main(int argc, char **argv) {
     g_src = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
     const char *c = argv[1];
     if (!strcmp(c, "scale"))    { printf("%g\n", g_scale); return 0; }
+    if (!strcmp(c, "where"))    { CGPoint p = cur_pt(); printf("%ld %ld\n", (long)(p.x * g_scale + .5), (long)(p.y * g_scale + .5)); return 0; }
+    if (!strcmp(c, "trusted"))  { printf("%d\n", AXIsProcessTrusted() ? 1 : 0); return 0; }
     if (!strcmp(c, "move") && argc >= 4)    { mouse_at(px_to_pt(atof(argv[2]), atof(argv[3]))); return 0; }
     if (!strcmp(c, "moverel") && argc >= 4) { CGPoint p = cur_pt(); p.x += atof(argv[2]) / g_scale; p.y += atof(argv[3]) / g_scale; mouse_at(p); return 0; }
     if (!strcmp(c, "down") && argc >= 3)    return button(atoi(argv[2]), 1);
@@ -313,6 +342,8 @@ int main(int argc, char **argv) {
     if (!strcmp(c, "find") && argc >= 4)    return cmd_find(argv[2], argv[3]);
     if (!strcmp(c, "title") && argc >= 3)   return cmd_title(atol(argv[2]));
     if (!strcmp(c, "bounds") && argc >= 3)  return cmd_bounds(atol(argv[2]));
+    if (!strcmp(c, "client") && argc >= 3)  return cmd_client(atol(argv[2]));
+    if (!strcmp(c, "titlebar"))             { printf("%ld\n", (long)(titlebar_pt() * g_scale + .5)); return 0; }
     if (!strcmp(c, "pid") && argc >= 3)     { long p = win_pid(atol(argv[2])); if (!p) return 1; printf("%ld\n", p); return 0; }
     if (!strcmp(c, "activate") && argc >= 3) return cmd_activate(atol(argv[2]));
     if (!strcmp(c, "seq"))                  return run_seq(argc - 2, argv + 2);

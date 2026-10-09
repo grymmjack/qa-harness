@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# drivers/windows/qa-run — run a command in the logged-in DESKTOP session of
+# QA_DESKTOP_USER (default grymm) from anywhere, including SSH: a Scheduled Task
+# "qa-runner" (run only when that user is logged on) starts Git Bash on
+# C:\qa-runner\job.sh, hidden. Output C:\qa-runner\last.log, code last.exit.
+#   qa-run [--wait] CMD...
+set -uo pipefail
+R=/c/qa-runner; U="${QA_DESKTOP_USER:-grymm}"
+wait=0; [[ "${1:-}" == "--wait" ]] && { wait=1; shift; }
+{
+    echo '#!/usr/bin/env bash'
+    printf 'cd %q\n' "$PWD"
+    printf '%q ' "$@"; echo
+} > "$R/job.sh"
+cat > "$R/run.vbs" <<'VBS'
+Set sh = CreateObject("WScript.Shell")
+rc = sh.Run("""C:\Program Files\Git\bin\bash.exe"" -lc ""/c/qa-runner/job.sh > /c/qa-runner/last.log 2>&1; echo $? > /c/qa-runner/last.exit""", 0, True)
+VBS
+rm -f "$R/last.exit"
+schtasks //Create //TN qa-runner //TR "wscript.exe C:\\qa-runner\\run.vbs" //SC ONCE //ST 23:59 //RU "$U" //IT //F >/dev/null
+schtasks //Run //TN qa-runner >/dev/null
+if (( wait )); then
+    until [[ -f "$R/last.exit" ]]; do sleep 0.5; done
+    cat "$R/last.log"
+    exit "$(tr -d '\r ' < "$R/last.exit")"
+fi

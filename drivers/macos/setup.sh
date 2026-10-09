@@ -9,10 +9,19 @@ command -v magick >/dev/null || brew install imagemagick
 # the harness speaks GNU userland (sed -i, date -d, grep -P, timeout, stat -c): qa-run puts these first
 for f in coreutils gnu-sed grep findutils gawk; do brew list --versions "$f" >/dev/null 2>&1 || HOMEBREW_NO_AUTO_UPDATE=1 brew install "$f"; done
 mkdir -p "$HOME/.qa-runner/bin"
-clang -O2 -o "$HOME/.qa-runner/bin/qa-io" "$HERE/qa-io.c" -framework ApplicationServices -framework CoreFoundation
+clang -O2 -o "$HOME/.qa-runner/bin/qa-io" "$HERE/qa-io.c" -framework ApplicationServices -framework CoreFoundation -framework AppKit
 APP="$HOME/Applications/QA Runner.app"
 mkdir -p "$APP/Contents/MacOS"
-clang -O2 -o "$APP/Contents/MacOS/qa-runner" "$HERE/qa-runner.c"
+# only replace the app when its program really changed: a new binary is a new
+# code signature, and macOS drops the Accessibility / Screen Recording grants
+clang -O2 -o "$HOME/.qa-runner/qa-runner.new" "$HERE/qa-runner.c"
+NEW_APP=0
+if ! cmp -s "$HOME/.qa-runner/qa-runner.new" "$HOME/.qa-runner/qa-runner.built" 2>/dev/null || [[ ! -x "$APP/Contents/MacOS/qa-runner" ]]; then
+    cp "$HOME/.qa-runner/qa-runner.new" "$APP/Contents/MacOS/qa-runner"
+    cp "$HOME/.qa-runner/qa-runner.new" "$HOME/.qa-runner/qa-runner.built"
+    NEW_APP=1
+fi
+rm -f "$HOME/.qa-runner/qa-runner.new"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -25,7 +34,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSUIElement</key><true/>
 </dict></plist>
 PLIST
-codesign --force --deep -s - "$APP" >/dev/null 2>&1 || true
+(( NEW_APP )) && { codesign --force --deep -s - "$APP" >/dev/null 2>&1 || true; echo "QA Runner.app was (re)built: grant its permissions again"; }
 echo "QA Runner.app: $APP"
 echo "qa-io: $HOME/.qa-runner/bin/qa-io"
 cat <<'MSG'

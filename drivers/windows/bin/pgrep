@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# pgrep shim for Git Bash (ps -W). Supports: -P PPID, -f PATTERN (command
+# path), -x NAME (exact image name). Prints MSYS pids.
+mode="" val=""
+while (( $# )); do
+    case "$1" in
+        -P) mode=P; val=$2; shift 2 ;;
+        -f) mode=f; val=$2; shift 2 ;;
+        -x) mode=x; val=$2; shift 2 ;;
+        -*) shift ;;
+        *)  mode=x; val=$1; shift ;;
+    esac
+done
+ps -W 2>/dev/null | awk -v m="$mode" -v v="$val" 'NR > 1 {
+    pid = $1; ppid = $2; cmd = $0; sub(/^([^ ]+ +){7}/, "", cmd)
+    n = cmd; sub(/.*[\\\/]/, "", n)
+    if (m == "P" && ppid == v) print pid
+    else if (m == "f" && index(cmd, v) > 0) print pid
+    else if (m == "x" && (n == v || n == v ".exe")) print pid
+}' | grep -v "^$$\$"
