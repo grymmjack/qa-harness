@@ -78,6 +78,7 @@ PALETTE_MIN_ROWS=1
 SOUNDS_ENABLED=FALSE
 MUSIC_ENABLED=FALSE
 STOCK_DEFAULT_LAYOUT=0
+FPS_IDLE=60
 OVERRIDES
     # [Windows] the OS enforces DRAW's window minimum on every resize (Xvfb has
     # no window manager, so Linux never does): its chrome needs 516 rows, and a
@@ -85,6 +86,10 @@ OVERRIDES
     [[ "${QA_OS:-}" == Windows ]] && echo "SCREEN_HEIGHT=516"
     return 0
 }
+
+# FPS_IDLE=60: DRAW reads input at its full rate even when idle (default 15 fps,
+# ~66ms frames), so a press + move or two quick clicks are never folded into one
+# idle frame - tests start on an idle DRAW (wait-until-painted).
 
 # Build DRAW.qa.cfg from DRAW.cfg.default with the overrides above applied.
 # Re-asserts the overrides on EVERY call (startup + before each test launch) — it

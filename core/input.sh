@@ -40,8 +40,10 @@ double_click() {
     # one atomic sequence with exact pauses: the app's double-click window (DRAW:
     # 0.3s) must not depend on what one driver call costs (~70ms on Windows -
     # six separate calls put the clicks ~0.45s apart and it saw two single clicks)
-    driver_input_seq down 1 sleep 50 move $(( ax + 1 )) "$ay" sleep 50 up 1 sleep 100 \
-                     down 1 sleep 50 move $(( ax + 2 )) "$ay" sleep 50 up 1
+    # A small move first wakes an idle app (DRAW drops to 15 fps when idle), then
+    # two quick clicks ~130ms apart, each held long enough for a frame to see it.
+    driver_input_seq move $(( ax + 1 )) "$ay" sleep 80 \
+                     down 1 sleep 60 up 1 sleep 70 down 1 sleep 60 up 1
     sleep 0.1
 }
 
