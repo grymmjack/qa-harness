@@ -37,12 +37,12 @@ double_click() {
     _qa_pre_input
     read -r ax ay <<< "$(adapter_to_screen "$1" "$2")"
     driver_input_move "$ax" "$ay"; sleep 0.05
-    driver_input_button down 1; sleep 0.05
-    driver_input_move $(( ax + 1 )) "$ay"; sleep 0.05
-    driver_input_button up 1; sleep 0.1
-    driver_input_button down 1; sleep 0.05
-    driver_input_move $(( ax + 2 )) "$ay"; sleep 0.05
-    driver_input_button up 1; sleep 0.1
+    # one atomic sequence with exact pauses: the app's double-click window (DRAW:
+    # 0.3s) must not depend on what one driver call costs (~70ms on Windows -
+    # six separate calls put the clicks ~0.45s apart and it saw two single clicks)
+    driver_input_seq down 1 sleep 50 move $(( ax + 1 )) "$ay" sleep 50 up 1 sleep 100 \
+                     down 1 sleep 50 move $(( ax + 2 )) "$ay" sleep 50 up 1
+    sleep 0.1
 }
 
 # drag from_x from_y to_x to_y [button=1]

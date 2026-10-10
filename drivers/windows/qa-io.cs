@@ -196,6 +196,7 @@ static class QaIo {
             else if (t == "key" && k + 1 < a.Length) { KeyCombo(a[k + 1]); k += 2; }
             else if (t == "keydown" && k + 1 < a.Length) { KeyUpDown(a[k + 1], true); k += 2; }
             else if (t == "keyup" && k + 1 < a.Length) { KeyUpDown(a[k + 1], false); k += 2; }
+            else if (t == "sleep" && k + 1 < a.Length) { Ms(int.Parse(a[k + 1])); k += 2; }
             else { Console.Error.WriteLine("qa-io seq: bad token '" + t + "'"); return 2; }
             Ms(8);
         }

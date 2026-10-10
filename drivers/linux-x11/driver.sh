@@ -174,6 +174,7 @@ driver_input_seq() {
             key)     a+=(key "$2"); shift 2 ;;
             keydown) a+=(keydown "$2"); shift 2 ;;
             keyup)   a+=(keyup "$2"); shift 2 ;;
+            sleep)   a+=(sleep "$(awk -v m="$2" 'BEGIN{printf "%.3f", m/1000}')"); shift 2 ;;   # MS
             *) echo "driver_input_seq: unknown token '$1'" >&2; return 2 ;;
         esac
     done
