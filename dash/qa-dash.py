@@ -431,7 +431,7 @@ def gather() -> dict:
             fails[cur] = lf[cur]                    # failing right now, still running
         plan = read_plan(dp) or [Path(x).stem for x in procs.get(d, {}).get("tests", [])]
         runs.append({
-            "tests": plan if is_live else [], "app": st.get("app", ""),
+            "tests": plan if is_live else [], "app": st.get("app", ""), "host": st.get("host", ""),
             "dir": d, "label": "harness default" if dp.name == "results" else dp.name.removeprefix("qa-"),
             "root": root, "branch": branch_of(root), "live": is_live, "status": st, "rows": rows,
             "fails": fails, "log": str(log) if log else "", "tsv": str(tsv) if tsv else None,
@@ -597,6 +597,10 @@ def farm_panel(host: str, s: dict, hist: dict) -> Panel:
     state = s.get("state", "?")
     style = {"building": "bold yellow", "built": "bold green", "failed": "bold white on red",
              "qa-running": "bold green", "qa-done": "bold"}.get(state, "bold")
+    with FARM_LOCK:
+        phase_now = ((FARM_LIVE.get(host) or {}).get("status") or {}).get("phase", "")
+    if state == "qa-running" and phase_now in ("done", "aborted"):
+        state = "built"      # farm tooling records the start of a QA run, not its end
     label = {"building": "BUILDING", "built": "BUILT", "failed": "BUILD FAILED"}.get(state, state.upper())
     started, finished = s.get("started", 0), s.get("finished", 0)
     ref = str(s.get("ref", "?")).removeprefix("origin/")
@@ -668,6 +672,12 @@ def farm_section(hist: dict):
 
 
 # ── render ────────────────────────────────────────────────────────────────────
+def host_label(r: dict) -> str:
+    """Where a run ran: this machine's name + "(local)", or the host it named."""
+    h = r.get("host") or HOSTNAME
+    return f"{h} (local)" if h == HOSTNAME else h
+
+
 def run_panel(i: int, r: dict, hist: dict) -> Panel:
     st = r["status"]
     body = []
@@ -741,6 +751,7 @@ def run_panel(i: int, r: dict, hist: dict) -> Panel:
             t.append(f" {secs}s   ", style="dim")
         body.append(t)
     title = Text.assemble((f"[{i}] ", "bold yellow"), (f"{r['app']} · " if r["app"] else "", "bold"), (r["label"], "bold magenta"),
+                          (f" · {host_label(r)}", "bold cyan"),
                           ("  LIVE" if r["live"] else "", "bold green"))
     return Panel(Group(*body), title=title, title_align="left",
                  border_style="magenta" if r["live"] else "dim", padding=(0, 1))
@@ -811,7 +822,7 @@ def recent_table(done: list, first: int, hist: dict) -> Panel:
             fl.append(f" ({lab.split(' (')[0].split(':')[0]})  ", style=sty)
         if r["status"].get("reason"):
             fl = Text("why: " + r["status"]["reason"], style="bold red")
-        t.add_row(f"[{k}]", (f"{r['app']} · " if r["app"] else "") + r["label"], r["branch"], state, clock(st0), clock(r["updated"]), fmt_secs(el), res,
+        t.add_row(f"[{k}]", (f"{r['app']} · " if r["app"] else "") + r["label"] + f" · {host_label(r)}", r["branch"], state, clock(st0), clock(r["updated"]), fmt_secs(el), res,
                   fl if (r["fails"] or r["status"].get("reason")) else Text("—", style="dim"))
     return Panel(t, title=Text("recent runs", style="bold"), title_align="left", border_style="dim", padding=(0, 1))
 
@@ -843,7 +854,7 @@ def build_footer(interval: float, auto: bool) -> Text:
 def render(data: dict, interactive=False, interval=3.0, auto=True, show_help=False):
     runs = data["runs"]
     nlive = sum(1 for r in runs if r["live"])
-    head = Text.assemble((OPT["title"], "bold"), (f"   {nlive} running", "bold green" if nlive else "dim"),
+    head = Text.assemble((OPT["title"], "bold"), (f"  on {HOSTNAME}", "cyan"), (f"   {nlive} running", "bold green" if nlive else "dim"),
                          (f" · {len(runs) - nlive} recent", "dim"),
                          ("   " + clock(data["when"], True) + " " + tz_name(), "dim"))
     parts = [head]
