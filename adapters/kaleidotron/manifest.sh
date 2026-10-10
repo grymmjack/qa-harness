@@ -19,6 +19,8 @@ ADAPTER_NAME="kaleidotron"
 ADAPTER_TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tests"
 
 _KT_ROOT="${KALEIDOTRON_ROOT:-$HOME/git/kaleidotron}"
+ADAPTER_APP_ROOT="$_KT_ROOT"        # the checkout under test (bin/qa-dash shows its branch)
+# known failures / dashboard target: known-failures.txt, qa-target.txt beside tests/
 _KT_BIN="$_KT_ROOT/target/release/kaleidotron"
 # The window title is "kaleidotron — <path> (<zoom>%)" (update_window_title), so
 # this is a PREFIX match. xdotool --name takes a regex and matches substrings,

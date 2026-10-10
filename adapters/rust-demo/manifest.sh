@@ -8,6 +8,7 @@
 ADAPTER_NAME="rust-demo"
 # Tests live beside this manifest.
 ADAPTER_TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tests"
+ADAPTER_APP_ROOT="${QA_HARNESS_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}/examples/rust-demo"
 
 _RD_BIN="${QA_HARNESS_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}/examples/rust-demo/target/release/qa-demo"
 _RD_TITLE="qa-demo"

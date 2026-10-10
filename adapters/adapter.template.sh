@@ -12,6 +12,10 @@
 # ── 1. Identity ──────────────────────────────────────────────────────────────
 ADAPTER_NAME="myapp"          # report title / project name
 ADAPTER_TESTS_DIR="tests"     # dir of *.sh test files, relative to this manifest
+# For bin/qa-dash (all optional):
+ADAPTER_APP_ROOT=""           # the app's checkout - the dashboard shows its git branch
+# ADAPTER_KNOWN_FAILURES=...  # "test-name  reason" per line; default: known-failures.txt beside the tests folder
+# ADAPTER_TARGET_FILE=...     # the dashboard's "needs to pass" set; default: qa-target.txt beside the tests folder
 
 # ── 2. Launch / quit ─────────────────────────────────────────────────────────
 # adapter_launch <timeout_s> → start the app, export ADAPTER_PID, block until the

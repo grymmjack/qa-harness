@@ -152,6 +152,36 @@ _eta_for() {
 _fmt_secs() { printf '%d:%02d' $(( $1 / 60 )) $(( $1 % 60 )); }
 
 # ── Live status (queryable while a suite runs) ────────────────────────────────
+# A JSON string literal (escapes \ and ").
+_json_str() { local v=${1//\\/\\\\}; v=${v//\"/\\\"}; printf '"%s"' "$v"; }
+
+# What this run is, for anything reading status.json without the adapter
+# (bin/qa-dash): which app, which checkout, where its tests / known failures /
+# target live, and the runner's pid + host (so "still running?" needs no /proc).
+# Adapters set ADAPTER_APP_ROOT / ADAPTER_KNOWN_FAILURES / ADAPTER_TARGET_FILE;
+# the last two default to files beside the tests folder.
+_STATUS_META=""
+_status_meta_init() {
+    local tdir=${ADAPTER_TESTS_DIR:-}
+    [[ -n "$tdir" && -d "$tdir" ]] && tdir=$(cd "$tdir" && pwd)
+    local base=${tdir%/*}
+    local kf=${ADAPTER_KNOWN_FAILURES:-${base:+$base/known-failures.txt}}
+    local tf=${ADAPTER_TARGET_FILE:-${base:+$base/qa-target.txt}}
+    _STATUS_META=$(printf ',"app":%s,"app_root":%s,"tests_dir":%s,"known_failures":%s,"target_file":%s,"pid":%d,"host":%s,"harness":%s' \
+        "$(_json_str "${ADAPTER_NAME:-}")" "$(_json_str "${ADAPTER_APP_ROOT:-}")" "$(_json_str "$tdir")" \
+        "$(_json_str "$kf")" "$(_json_str "$tf")" "$$" "$(_json_str "$(hostname 2>/dev/null || uname -n)")" \
+        "$(_json_str "${QA_HARNESS_ROOT:-}")")
+}
+
+# Remember this results dir in ${XDG_CACHE_HOME:-~/.cache}/qa-harness/results-dirs
+# (one absolute path per line) - how bin/qa-dash finds every run, live or past.
+_register_results_dir() {
+    local reg="${XDG_CACHE_HOME:-$HOME/.cache}/qa-harness/results-dirs" d
+    d=$(cd "$RESULTS_DIR" 2>/dev/null && pwd) || return 0
+    mkdir -p "${reg%/*}" 2>/dev/null || return 0
+    grep -qxF "$d" "$reg" 2>/dev/null || echo "$d" >> "$reg"
+}
+
 # _write_status <phase> <i> <total> <curname> <elapsed_s> <remaining_s>
 _write_status() {
     local phase=$1 i=$2 total=$3 curname=$4 elapsed=$5 remaining=$6
@@ -161,9 +191,9 @@ _write_status() {
     now_epoch=$(date +%s)
     eta_epoch=$(( now_epoch + remaining ))
     eta_clock=$(date -d "@$eta_epoch" '+%H:%M:%S' 2>/dev/null || echo "")
-    printf '{"phase":"%s","current":%d,"total":%d,"test":"%s","passed":%d,"failed":%d,"skipped":%d,"elapsed_s":%d,"remaining_s":%d,"eta_epoch":%d,"eta_clock":"%s","updated":%d}\n' \
+    printf '{"phase":"%s","current":%d,"total":%d,"test":"%s","passed":%d,"failed":%d,"skipped":%d,"elapsed_s":%d,"remaining_s":%d,"eta_epoch":%d,"eta_clock":"%s","updated":%d%s}\n' \
         "$phase" "$i" "$total" "$curname" "$PASS" "$FAIL" "$SKIP" \
-        "$elapsed" "$remaining" "$eta_epoch" "$eta_clock" "$now_epoch" \
+        "$elapsed" "$remaining" "$eta_epoch" "$eta_clock" "$now_epoch" "$_STATUS_META" \
         > "$STATUS_JSON.tmp" && mv -f "$STATUS_JSON.tmp" "$STATUS_JSON"
     { printf 'phase      %s\n'            "$phase"
       printf 'progress   %d/%d  %s\n'     "$i" "$total" "$curname"
@@ -576,6 +606,10 @@ qa_main() {
 
     local ORIG_KEEP_OPEN=$KEEP_OPEN
     local RUN_T0=$SECONDS _TOTAL=${#TEST_FILES[@]} _i=0 _name
+    _status_meta_init
+    mkdir -p "$RESULTS_DIR"
+    for f in "${TEST_FILES[@]}"; do basename "$f" .sh; done > "$RESULTS_DIR/run-plan.txt"   # this run's tests, in order
+    _register_results_dir
     _write_status starting 0 "$_TOTAL" "-" 0 "$_ETA_TOTAL"
     for f in "${TEST_FILES[@]}"; do
         if [[ "$f" == "$LAST_TEST_FILE" ]]; then KEEP_OPEN=$ORIG_KEEP_OPEN; else KEEP_OPEN=0; fi

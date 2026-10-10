@@ -2,3 +2,5 @@ results/
 *.log
 __pycache__/
 *.pyc
+# a dashboard target is personal working state
+qa-target.txt

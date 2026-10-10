@@ -56,6 +56,7 @@ seam is what lets one test file run against different apps. Full contract:
 | `drivers/macos/` | `qa-io.c` (CoreGraphics input, window list, Retina px↔pt), `screencapture`, the `QA Runner.app` that holds the permissions, `qa-run` |
 | `drivers/windows/` | `qa-io.cs` (SendInput scan codes, per-monitor DPI-aware pixels, GDI capture, EnumWindows), ImageMagick shims, `qa-run` |
 | `report/qa-report.py` | project-agnostic HTML + JUnit report from a run's TSV (already portable) |
+| `bin/qa-dash`, `dash/` | the live dashboard over every run's results (any adapter) |
 | `adapters/` | one tiny manifest per app; `adapters/draw/` is the reference adapter |
 | `bin/qa` | entry point: load core + a driver + an adapter manifest, then run |
 | `examples/` | sample tests that exercise the driver against a trivial app |
@@ -87,6 +88,31 @@ QA_RESULTS_DIR=/tmp/runB bin/qa --adapter adapters/kaleidotron --offscreen &
 One caveat is per-adapter, not core: an adapter that pins a fixed app-`HOME`/config
 path must derive it from `QA_RESULTS_DIR` (as the kaleidotron adapter does) or two
 runs of *that* app share one app sandbox.
+
+## Watching runs (`bin/qa-dash`)
+
+A live terminal dashboard for every run on the machine, any adapter: progress,
+the current test against its usual time (flags a stall), finish time from all
+past timings, the app's checkout and branch, and each failure with a verdict -
+**NEW** (passed before), **flaky**, **failed before too**, **known** (listed in the
+adapter's known-failures file) or **first run**. Keys: `1-9` follow a run's log,
+`Shift+1-9` open its newest failure screenshot, `?` help.
+
+```bash
+bin/qa-dash                                  # live
+bin/qa-dash --once                           # one snapshot
+bin/qa-dash --app kaleidotron --plan anim    # what a set of tests would take, last results
+bin/qa-dash --app kaleidotron --target "before release" 'a.*' chrome   # "needs to pass" panel
+```
+
+It needs no setup: each runner writes what it is into `status.json` (app,
+checkout, tests, known failures, pid + host) and records its results folder in
+`~/.cache/qa-harness/results-dirs`. Adapters can set `ADAPTER_APP_ROOT`,
+`ADAPTER_KNOWN_FAILURES` and `ADAPTER_TARGET_FILE` (see the template). An app can
+ship a one-line wrapper with its own title and paths, as DRAW's `DEV/qa-dash.sh`
+does. Build-farm hosts appear as panels when your farm tooling writes
+`~/.cache/qa-dash/farm/<host>.json` (format in `dash/qa-dash.py`). Needs Python 3.9+
+with `rich`; [uv](https://docs.astral.sh/uv/) fetches it automatically.
 
 ## Platforms
 

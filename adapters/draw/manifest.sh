@@ -29,6 +29,9 @@ esac
 # ── 1. Identity ──────────────────────────────────────────────────────────────
 ADAPTER_NAME="${QA_PROJECT:-DRAW}"          # report title / project name
 ADAPTER_TESTS_DIR="$DRAW_ROOT/QA/tests"     # absolute — DRAW's tests live in its repo
+ADAPTER_APP_ROOT="$DRAW_ROOT"               # the checkout under test (bin/qa-dash shows its branch)
+# known failures: QA/known-failures.txt (the default, beside the tests)
+ADAPTER_TARGET_FILE="$DRAW_ROOT/.claude/qa-target.txt"
 
 WINDOW_TITLE="DRAW v"
 DRAW_PID=""

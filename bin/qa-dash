@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# bin/qa-dash — the live dashboard for qa-harness runs, any adapter (dash/qa-dash.py;
+# options in its header: --once, --watch N, --app NAME, --plan, --target, ...).
+# Needs Python 3.9+ with `rich`: uv (https://docs.astral.sh/uv/) fetches it on the fly;
+# otherwise `pip install rich`.
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if command -v uv >/dev/null 2>&1; then
+    exec uv run --quiet --script "$HERE/dash/qa-dash.py" "$@"
+fi
+if ! python3 -c 'import rich' 2>/dev/null; then
+    echo "qa-dash needs Python 3.9+ with rich - install uv (recommended) or: pip install rich" >&2
+    exit 1
+fi
+exec python3 "$HERE/dash/qa-dash.py" "$@"
