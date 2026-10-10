@@ -463,10 +463,15 @@ draw_launch() {
     driver_window_ready "$DRAW_WID"
     draw_focus
     sleep 0.3
-    info "Positioning window (Meta+Home)..."
     driver_window_activate "$DRAW_WID"
     sleep 0.2
-    driver_input_seq key super+Home
+    # Meta+Home is the KDE window manager's "park" shortcut - Linux only. On a
+    # Mac DRAW gets it as Home and FLIPS the layer (an undo step in every test);
+    # on Windows Win+Home minimises the other windows.
+    if [[ "${QA_OS:-Linux}" == Linux ]]; then
+        info "Positioning window (Meta+Home)..."
+        driver_input_seq key super+Home
+    fi
     sleep 0.5   # let the WM finish the window animation
     _update_win_pos
     info "Window position: ${WIN_ABS_X},${WIN_ABS_Y}"
@@ -506,11 +511,11 @@ _wait_painted() {
 }
 
 # adapter_park_window → move+resize the DRAW window to a known desktop rect.
-# DRAW binds Meta+Home for this (also done inside draw_launch).
+# Linux/KDE: the window manager's Meta+Home shortcut (also done inside draw_launch).
 adapter_park_window() {
     [[ -z "$DRAW_WID" ]] && return
     driver_window_activate "$DRAW_WID"
-    driver_input_seq key super+Home
+    [[ "${QA_OS:-Linux}" == Linux ]] && driver_input_seq key super+Home   # KDE only (see draw_launch)
     sleep 0.5
     _update_win_pos
 }
