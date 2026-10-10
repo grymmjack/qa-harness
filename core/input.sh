@@ -56,7 +56,10 @@ drag() {
     sleep 0.1
     # Atomic press+motion so DRAW registers a real drag-start (see driver note).
     driver_input_button_move down "$btn" $(( ax1 + 1 )) "$ay1"
-    sleep 0.05
+    # the press must be seen on its own frame before the pointer moves on: an
+    # idle app polls slowly (DRAW: 15 fps, ~66ms) and a press + jump read in one
+    # frame starts the stroke at the END point (a dot, not a line)
+    sleep 0.15
     driver_input_move "$ax2" "$ay2"
     sleep 0.15
     driver_input_button up "$btn"
@@ -88,7 +91,7 @@ mouse_down() {
     driver_input_move "$ax" "$ay"
     sleep 0.06
     driver_input_button_move down "$btn" $(( ax + 1 )) "$ay"
-    sleep 0.05
+    sleep 0.15   # its own frame before any motion (see drag)
 }
 mouse_up() {
     local btn=${1:-1}
