@@ -133,3 +133,9 @@ how to **match the window** (title / pid / geometry — a stable window id is *n
 required), the **logical→screen** mapping, any **blessed config**, lifecycle
 **hooks** (`is_alive`, optional `wait`/`park_window`), and where the **tests**
 live. That's the whole integration surface.
+
+## License
+
+MIT - see [LICENSE](LICENSE). The test fixtures include DejaVu Sans
+(`adapters/kaleidotron/fixtures-plugins/05-font.ttf`), under its own free licence
+(embedded in the font).

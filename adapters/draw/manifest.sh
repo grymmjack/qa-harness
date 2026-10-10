@@ -9,7 +9,15 @@
 # QB64-PE exposes no stable window id, so we match by title "DRAW v" + pid.
 
 # ── DRAW locations ───────────────────────────────────────────────────────────
-DRAW_ROOT="${DRAW_ROOT:-/home/grymmjack/git/DRAW}"
+# DRAW's QA/draw-qa.sh sets DRAW_ROOT; run directly, the DRAW checkout is the
+# current folder or its parent (from QA/).
+if [[ -z "${DRAW_ROOT:-}" ]]; then
+    for _d in "$PWD" "$PWD/.."; do
+        [[ -f "$_d/DRAW.BAS" ]] && { DRAW_ROOT=$(cd "$_d" && pwd); break; }
+    done
+    unset _d
+fi
+[[ -n "${DRAW_ROOT:-}" ]] || { echo "ERROR: set DRAW_ROOT to your DRAW checkout (or run from it, or from its QA folder)" >&2; exit 1; }
 # Overridable so a scratch/alternate binary can be exercised without disturbing
 # the tree's DRAW.run (e.g. validating a crash trap against a deliberately-broken
 # build). Still launched from DRAW_ROOT so asset paths resolve.
@@ -470,7 +478,7 @@ draw_launch() {
 adapter_launch() { draw_launch "$@"; }
 
 # _wait_painted SECS - until DRAW's client area shows real content (more than a
-# handful of colours) and holds still. On a slower host (titan, 2026-10-09)
+# handful of colours) and holds still. On a slower Linux host (2026-10-09)
 # the first snapshot of a test caught the window before its first frames were
 # drawn - one flat grey - and 12 of the first 14 tests failed on that alone.
 _wait_painted() {

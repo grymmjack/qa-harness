@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # drivers/windows/qa-run — run a command in the logged-in DESKTOP session of
-# QA_DESKTOP_USER (default grymm) from anywhere, including SSH: a Scheduled Task
+# QA_DESKTOP_USER (default: whoever is logged on to the console, as Windows
+# reports it - DOMAIN\user) from anywhere, including SSH: a Scheduled Task
 # "qa-runner" (run only when that user is logged on) starts Git Bash on
 # C:\qa-runner\job.sh, hidden. Output C:\qa-runner\last.log, code last.exit.
 #   qa-run [--wait] CMD...
 set -uo pipefail
-R=/c/qa-runner; U="${QA_DESKTOP_USER:-grymm}"
+R=/c/qa-runner
+U="${QA_DESKTOP_USER:-$(powershell -NoProfile -Command '(Get-CimInstance Win32_ComputerSystem).UserName' 2>/dev/null | tr -d '\r')}"
+[[ -n "$U" ]] || { echo "qa-run: nobody is logged on to the desktop - log on, or set QA_DESKTOP_USER" >&2; exit 2; }
 wait=0; [[ "${1:-}" == "--wait" ]] && { wait=1; shift; }
 {
     echo '#!/usr/bin/env bash'
