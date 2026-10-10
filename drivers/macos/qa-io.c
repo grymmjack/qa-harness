@@ -36,6 +36,9 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/time.h>
+#include <signal.h>
+#include <errno.h>
+#include <stdarg.h>
 
 static double g_scale = 1.0;
 static CGEventSourceRef g_src;
@@ -438,11 +441,32 @@ static int sock_addr(struct sockaddr_un *a) {
     if (strlen(sock_path()) >= sizeof a->sun_path) return 0;
     strcpy(a->sun_path, sock_path()); return 1;
 }
+// ~/.qa-runner/io-serve.log: server start / exit / signals, and clients that
+// found the socket but no server behind it (input then runs per call, where
+// drags break) - the trail to read when drags start failing mid-run
+static void io_log(const char *fmt, ...) {
+    char p[1024]; const char *h = getenv("HOME");
+    snprintf(p, sizeof p, "%s/.qa-runner/io-serve.log", h ? h : "/tmp");
+    FILE *f = fopen(p, "a"); if (!f) return;
+    struct timeval tv; gettimeofday(&tv, NULL);
+    fprintf(f, "%ld.%03d pid %d: ", (long)tv.tv_sec, (int)(tv.tv_usec / 1000), (int)getpid());
+    va_list ap; va_start(ap, fmt); vfprintf(f, fmt, ap); va_end(ap);
+    fputc('\n', f); fclose(f);
+}
+static void on_signal(int sig) { io_log("serve: killed by signal %d", sig); signal(sig, SIG_DFL); raise(sig); }
+
 // -1 = no server (run locally), else the server's exit code
 static int forward(int argc, char **argv) {
     struct sockaddr_un a; if (!sock_addr(&a)) return -1;
     int fd = socket(AF_UNIX, SOCK_STREAM, 0); if (fd < 0) return -1;
-    if (connect(fd, (struct sockaddr *)&a, sizeof a) != 0) { close(fd); return -1; }
+    if (connect(fd, (struct sockaddr *)&a, sizeof a) != 0) {
+        int e = errno; close(fd);
+        if (access(a.sun_path, F_OK) == 0 && strcmp(argv[1], "noop") && strcmp(argv[1], "quit")) {
+            io_log("client %s: socket there but no server (errno %d) - running locally", argv[1], e);
+            fprintf(stderr, "qa-io: input server gone - '%s' runs per call (drags may fail)\n", argv[1]);
+        }
+        return -1;
+    }
     struct timeval tv = { 60, 0 }; setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
     for (int i = 1; i < argc; i++) { size_t n = strlen(argv[i]) + 1; if (write(fd, argv[i], n) != (ssize_t)n) { close(fd); return 2; } }
     shutdown(fd, SHUT_WR);
@@ -455,6 +479,10 @@ static int serve(void) {
     int s = socket(AF_UNIX, SOCK_STREAM, 0);
     if (s < 0 || bind(s, (struct sockaddr *)&a, sizeof a) != 0 || listen(s, 8) != 0) { perror("qa-io serve"); return 2; }
     st_buttons = 0; st_flags = 0; st_save(); st_loaded = 1;   // a fresh server: nothing held
+    signal(SIGPIPE, SIG_IGN);   // a client gone before its reply must not kill the server
+    signal(SIGTERM, on_signal); signal(SIGHUP, on_signal); signal(SIGINT, on_signal);
+    signal(SIGSEGV, on_signal); signal(SIGBUS, on_signal); signal(SIGABRT, on_signal);
+    io_log("serve: start (ppid %d)", (int)getppid());
     static char buf[65536];
     for (;;) {
         int c = accept(s, NULL, NULL); if (c < 0) continue;
@@ -465,7 +493,7 @@ static int serve(void) {
         for (size_t i = 0; i < len && ac < 255; ) { av[ac++] = buf + i; i += strlen(buf + i) + 1; }
         av[ac] = NULL;
         unsigned char rc = 2;
-        if (ac >= 2 && !strcmp(av[1], "quit")) { rc = 0; if (write(c, &rc, 1)) {} close(c); break; }
+        if (ac >= 2 && !strcmp(av[1], "quit")) { rc = 0; if (write(c, &rc, 1)) {} close(c); io_log("serve: stop"); break; }
         if (ac >= 2 && is_input_cmd(av[1])) rc = (unsigned char)dispatch(ac, av);
         if (write(c, &rc, 1)) {}
         close(c);
