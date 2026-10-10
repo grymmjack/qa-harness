@@ -850,17 +850,19 @@ def render(data: dict, interactive=False, interval=3.0, auto=True, show_help=Fal
     tp = target_panel(data)
     if tp:
         parts.append(tp)
-    fs = farm_section(data["hist"])
-    if fs is not None:
-        parts.append(fs)
-    if not runs:
-        parts.append(Panel(Text("No QA runs in the last day. " + OPT["hint"], style="dim")))
+    # this machine's live runs first, then the farm, then recent runs - the live
+    # view crops what does not fit, and a local run below four farm panels fell off
     shown = visible_runs(runs)
     i = 0
     for r in shown:
         if r["live"]:
             i += 1
             parts.append(run_panel(i, r, data["hist"]))
+    fs = farm_section(data["hist"])
+    if fs is not None:
+        parts.append(fs)
+    if not runs:
+        parts.append(Panel(Text("No QA runs in the last day. " + OPT["hint"], style="dim")))
     done = [r for r in shown if not r["live"]]
     if done:
         parts.append(recent_table(done, i, data["hist"]))
