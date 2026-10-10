@@ -84,8 +84,17 @@ OVERRIDES
     # no window manager, so Linux never does): its chrome needs 516 rows, and a
     # 514-row window snaps to 516 - pin 516 so the model matches the window
     [[ "${QA_OS:-}" == Windows ]] && echo "SCREEN_HEIGHT=516"
+    # [macOS] since QB64-PE #786 a window is sized in points: each image pixel is
+    # backing x backing physical pixels, so DISPLAY_SCALE 1 on Retina gives the
+    # same 2 physical px per viewport px as everywhere else
+    (( QA_BACKING > 1 && 2 % QA_BACKING == 0 )) && echo "DISPLAY_SCALE=$(( 2 / QA_BACKING ))"
     return 0
 }
+
+# physical pixels per window-image pixel: 2 on a Retina Mac (QB64-PE #786 sizes
+# windows in points), 1 elsewhere
+QA_BACKING=$(driver_backing_scale 2>/dev/null)
+[[ "$QA_BACKING" =~ ^[0-9]+$ ]] || QA_BACKING=1
 
 # FPS_IDLE=60: DRAW reads input at its full rate even when idle (default 15 fps,
 # ~66ms frames), so a press + move or two quick clicks are never folded into one
@@ -133,10 +142,10 @@ _num_or() {
     echo "$fallback"
 }
 
-# physical pixels per viewport pixel = DRAW's DISPLAY_SCALE. [Windows] needs
+# physical pixels per viewport pixel = DRAW's DISPLAY_SCALE x backing scale. [Windows] needs
 # QB64-PE with #786 (2026-10-10): before it, windows opened shrunk by the monitor
 # content scale and the geometry check fails.
-DISPLAY_SCALE=$(_num_or "$(_cfg DISPLAY_SCALE)" 1)
+DISPLAY_SCALE=$(( $(_num_or "$(_cfg DISPLAY_SCALE)" 1) * QA_BACKING ))   # physical px per viewport px
 
 # Window decoration height — detected after window creation (always 0 here; see
 # driver_detect_decoration_height). Override with DECORATION_H=22.
