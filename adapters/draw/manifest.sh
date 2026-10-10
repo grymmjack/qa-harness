@@ -429,6 +429,19 @@ draw_launch() {
     # dispatch tests (fire-*) assert against stale content in a NORMAL run instead
     # of skipping. In --developer runs DRAW recreates it during the test.
     rm -f "$DRAW_ROOT/inputs.log" 2>/dev/null
+    # A fresh cache dir per launch, never the user's: DRAW keeps its multi-instance
+    # registry there (~/.cache/DRAW/instances), and test instances that are killed
+    # leave their slots looking alive for a while - the user's own DRAW then opened
+    # as "[5]" on a per-instance config. Exported, so DRAWs a test starts itself
+    # (the --capture hand-off) share it. Linux + macOS read XDG_CACHE_HOME (DRAW's
+    # macOS build takes the Unix branch); Windows reads LOCALAPPDATA.
+    local qa_cache="$RESULTS_DIR/draw-cache"
+    rm -rf "$qa_cache"; mkdir -p "$qa_cache"
+    if [[ "${QA_OS:-}" == Windows ]]; then
+        export LOCALAPPDATA; LOCALAPPDATA=$(cygpath -w "$qa_cache" 2>/dev/null || echo "$qa_cache")
+    else
+        export XDG_CACHE_HOME="$qa_cache"
+    fi
     # Launch from DRAW_ROOT, not QA/. DRAW never CHDIRs and resolves some assets
     # against the current directory ("./ASSETS/..."), so running elsewhere breaks
     # palette .GPL previews and friends. Redirect (not tee) so DRAW_PID stays
