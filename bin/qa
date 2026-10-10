@@ -13,12 +13,14 @@
 set -u
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 
-# default driver by OS (override with --driver)
+# default driver by OS (override with --driver); QA_OS lets a test skip what
+# only holds on some platforms: [[ $QA_OS == Linux ]] || { skip "why"; return 0; }
 case "$(uname -s)" in
-    Darwin)                  DRIVER="macos" ;;
-    MINGW*|MSYS*|CYGWIN*)    DRIVER="windows" ;;
-    *)                       DRIVER="linux-x11" ;;
+    Darwin)                  DRIVER="macos";     QA_OS="macOS" ;;
+    MINGW*|MSYS*|CYGWIN*)    DRIVER="windows";   QA_OS="Windows" ;;
+    *)                       DRIVER="linux-x11"; QA_OS="Linux" ;;
 esac
+export QA_OS
 ADAPTER=""
 PASS_ARGS=()
 while (( $# )); do
