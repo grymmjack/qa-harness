@@ -76,13 +76,18 @@ _front_pid() { lsappinfo info -only pid "$(lsappinfo front)" 2>/dev/null | sed '
 driver_window_ready() {
     _qa_io_serve      # one process posts all input from here on (see qa-io.c serve())
     local pid i; pid=$("$QA_IO" pid "$1" 2>/dev/null) || return 0
+    # An app launched by QA Runner is not always activated: the previous app
+    # (VS Code, ...) can stay in front, and then the new one is not even in the
+    # app switcher's order - Cmd+Tab only toggles between other apps.
     for i in 1 2 3; do
         "$QA_IO" key cmd+Tab; sleep 0.8
         "$QA_IO" key cmd+Tab; sleep 0.8
         [[ "$(_front_pid)" == "$pid" ]] && return 0
     done
-    echo "warning: could not switch back to the app (front pid $(_front_pid), app pid $pid)" >&2
-    "$QA_IO" activate "$1" 2>/dev/null; return 0
+    # Never send a test's input to whatever else is in front (it would type into
+    # the user's editor): give up loudly instead.
+    echo "ERROR: could not bring the app to the front (front pid $(_front_pid), app pid $pid) - refusing to send input elsewhere" >&2
+    return 1
 }
 driver_window_bounds()   { "$QA_IO" client "$1" 2>/dev/null; }   # the CLIENT area, as the X11 driver reports it
 driver_window_key()      { "$QA_IO" activate "$1" 2>/dev/null; "$QA_IO" key "$2"; }

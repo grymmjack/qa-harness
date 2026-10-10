@@ -79,33 +79,11 @@ SOUNDS_ENABLED=FALSE
 MUSIC_ENABLED=FALSE
 STOCK_DEFAULT_LAYOUT=0
 OVERRIDES
-    _qa_cfg_os_overrides
-}
-
-# [Windows] QB64-PE's GLFW build (v4.7.0-GLFW, 2026-10) sizes a window as
-# image / monitor content scale on Windows - it converts as if GLFW's screen
-# coordinates were points, but on Windows they are pixels. At 250% a 1916x1028
-# screen opens as a 766x413 window (a bare `SCREEN _NEWIMAGE(800,600,32)` opens
-# 320x240). Until that is fixed, render at 2 x content scale so the shrunk window
-# is again 2 physical px per viewport px, with HIDPI_AWARE off so DRAW does not
-# clamp that scale to the (true) desktop size. Windows also enforces DRAW's
-# window minimum on every resize (Xvfb has no WM, so Linux never did): the
-# chrome needs 516 rows, so pin 516 instead of letting DRAW snap 514 -> 516.
-# Content scales where 2 x scale is not a whole number (125%, 175%) are not
-# supported; the geometry check then fails loudly.
-QA_WIN_SCALE=""
-case "$(uname -s)" in
-    MINGW*|MSYS*|CYGWIN*)
-        _cs=$(driver_content_scale 2>/dev/null)
-        [[ "$_cs" =~ ^[0-9.]+$ ]] || _cs=1
-        QA_WIN_SCALE=$(awk -v c="$_cs" 'BEGIN{ v=2*c; if (v==int(v)) print int(v); else print 2 }')
-        unset _cs ;;
-esac
-_qa_cfg_os_overrides() {
-    [[ -n "$QA_WIN_SCALE" ]] || return 0
-    echo "DISPLAY_SCALE=$QA_WIN_SCALE"
-    echo "HIDPI_AWARE=0"
-    echo "SCREEN_HEIGHT=516"
+    # [Windows] the OS enforces DRAW's window minimum on every resize (Xvfb has
+    # no window manager, so Linux never does): its chrome needs 516 rows, and a
+    # 514-row window snaps to 516 - pin 516 so the model matches the window
+    [[ "${QA_OS:-}" == Windows ]] && echo "SCREEN_HEIGHT=516"
+    return 0
 }
 
 # Build DRAW.qa.cfg from DRAW.cfg.default with the overrides above applied.
@@ -150,12 +128,10 @@ _num_or() {
     echo "$fallback"
 }
 
-# physical pixels per viewport pixel = DRAW's DISPLAY_SCALE: DRAW sizes its
-# window in backing pixels (a Retina Mac included - DRAW's macOS code does its
-# own points / pixels mapping). [Windows] the window is shrunk by the content
-# scale (see _qa_cfg_os_overrides), so it is 2 there.
+# physical pixels per viewport pixel = DRAW's DISPLAY_SCALE. [Windows] needs
+# QB64-PE with #786 (2026-10-10): before it, windows opened shrunk by the monitor
+# content scale and the geometry check fails.
 DISPLAY_SCALE=$(_num_or "$(_cfg DISPLAY_SCALE)" 1)
-[[ -n "$QA_WIN_SCALE" ]] && DISPLAY_SCALE=2
 
 # Window decoration height — detected after window creation (always 0 here; see
 # driver_detect_decoration_height). Override with DECORATION_H=22.
@@ -409,7 +385,7 @@ adapter_pre_launch() {
         [[ "$kv" == *=* ]] || continue
         # [Windows] DRAW runs *_COMMAND through cmd.exe, which runs neither a .sh
         # nor a forward-slash path: use the fixture's .cmd twin, backslashed.
-        if [[ -n "$QA_WIN_SCALE" && "$kv" == *_COMMAND=*.sh ]]; then
+        if [[ "${QA_OS:-}" == Windows && "$kv" == *_COMMAND=*.sh ]]; then
             local v=${kv#*=}; v=${v%.sh}.cmd; kv="${kv%%=*}=${v//\//\\}"
         fi
         DRAW_TEST_OPTIONS+=" --option $kv"
@@ -460,7 +436,10 @@ draw_launch() {
         exit 1
     fi
     info "Window found: WID=$DRAW_WID"
-    driver_window_ready "$DRAW_WID"
+    if ! driver_window_ready "$DRAW_WID"; then
+        echo "ERROR: DRAW's window could not be made the active app - stopping rather than sending input to another app" >&2
+        exit 1
+    fi
     draw_focus
     sleep 0.3
     driver_window_activate "$DRAW_WID"
