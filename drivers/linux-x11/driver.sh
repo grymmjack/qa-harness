@@ -100,9 +100,14 @@ driver_input_scroll() { # up|down [ticks]
 # (Ctrl+click, Shift+drag, …). No --window: XTEST so SDL2 sees real physical key
 # state (SDL_GetKeyboardState / _KEYDOWN), same reason driver_input_key avoids it.
 driver_input_key_hold() { # down|up  <keyname e.g. ctrl shift alt super>
+    # A bare "alt" held via keydown reached a GLFW app under Xvfb as the Q key
+    # (DRAW fired its Bezier-tool binding on alt_click / with_mods alt); the
+    # explicit keysym is unambiguous.
+    local k=$2
+    [[ "$k" == alt ]] && k=Alt_L
     case "$1" in
-        down) xdotool keydown "$2" ;;
-        up)   xdotool keyup   "$2" ;;
+        down) xdotool keydown "$k" ;;
+        up)   xdotool keyup   "$k" ;;
     esac
 }
 
