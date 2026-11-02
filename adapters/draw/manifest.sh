@@ -605,7 +605,10 @@ adapter_after_test() {
     [[ "${KEEP_OPEN:-0}" -eq 1 ]] && return   # last test in --keep-open: leave it up
     draw_settle                                # bounded: until no "DRAW v" window is mapped
     local pid _me=$$
-    for pid in $(pgrep -f "$DRAW_BIN" 2>/dev/null); do
+    # Only DRAWs the harness launched (they all run with --config $QA_CFG), never
+    # the user's own DRAW from the same checkout - matching "$DRAW_BIN" alone
+    # SIGKILLed a DRAW the user was working in mid-run (2026-11-01).
+    for pid in $(pgrep -f -- "--config $QA_CFG" 2>/dev/null); do
         [[ "$pid" == "$_me" ]] && continue
         kill -9 "$pid" 2>/dev/null
     done
