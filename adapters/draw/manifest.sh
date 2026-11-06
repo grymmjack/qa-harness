@@ -101,6 +101,35 @@ QA_BACKING=$(driver_backing_scale 2>/dev/null)
 # ~66ms frames), so a press + move or two quick clicks are never folded into one
 # idle frame - tests start on an idle DRAW (wait-until-painted).
 
+# QA_USER_PROFILE=1: test with the USER's own settings instead of the factory
+# defaults - DRAW.qa.cfg is built from a copy of their DRAW.cfg (QA_USER_CFG,
+# default ~/.config/DRAW/DRAW.cfg) and only the geometry / sound / pacing pins
+# below are applied, and each launch gets fresh scratch copies of their config
+# and data folders (workspaces, bindings, drawer sets) as XDG_CONFIG_HOME /
+# XDG_DATA_HOME - so a test sees their workspace and keys, and never writes to
+# the real files. [Linux/macOS] (Windows: not wired yet.)
+QA_USER_PROFILE=${QA_USER_PROFILE:-0}
+QA_USER_CFG=${QA_USER_CFG:-${XDG_CONFIG_HOME:-$HOME/.config}/DRAW/DRAW.cfg}
+QA_USER_CONFIG_DIR=${QA_USER_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/DRAW}
+QA_USER_DATA_DIR=${QA_USER_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/DRAW}
+# QA_USER_SCREEN=WxH@S: the viewport and scale the user's DRAW really runs at
+# (e.g. 1152x648@3 = a 3840x2160 desktop at UI_SCALE=3: 90% of the desktop / 3);
+# the Xvfb screen must hold it (QA_XVFB_RES=3840x2160). Unset = the QA 958x514@2.
+QA_USER_SCREEN=${QA_USER_SCREEN:-}
+_qa_user_overrides() {
+    # what the coordinate model needs explicit (0 = auto breaks it), plus quiet
+    # and full-rate input; everything else stays the user's
+    if [[ "$QA_USER_SCREEN" =~ ^([0-9]+)x([0-9]+)@([0-9]+)$ ]]; then
+        _qa_cfg_overrides | grep -E '^(UI_SCALE|SOUNDS_ENABLED|MUSIC_ENABLED|WORKSPACE_SAVE_PROMPT|FPS_IDLE)='
+        echo "SCREEN_WIDTH=${BASH_REMATCH[1]}"
+        echo "SCREEN_HEIGHT=${BASH_REMATCH[2]}"
+        echo "DISPLAY_SCALE=${BASH_REMATCH[3]}"
+        echo "TOOLBAR_SCALE=${BASH_REMATCH[3]}"
+        return 0
+    fi
+    _qa_cfg_overrides | grep -E '^(UI_SCALE|DISPLAY_SCALE|TOOLBAR_SCALE|SCREEN_WIDTH|SCREEN_HEIGHT|SOUNDS_ENABLED|MUSIC_ENABLED|WORKSPACE_SAVE_PROMPT|FPS_IDLE)='
+}
+
 # Build DRAW.qa.cfg from DRAW.cfg.default with the overrides above applied.
 # Re-asserts the overrides on EVERY call (startup + before each test launch) — it
 # does NOT cache-and-skip. DRAW's CONFIG_save writes its live config back to the
@@ -112,7 +141,15 @@ adapter_ensure_config() {
         exit 1
     fi
     local existed=0; [[ -f "$QA_CFG" ]] && existed=1
-    cp "$DRAW_ROOT/DRAW.cfg.default" "$QA_CFG"
+    local base="$DRAW_ROOT/DRAW.cfg.default" ovr=_qa_cfg_overrides
+    if [[ "$QA_USER_PROFILE" == 1 ]]; then
+        if [[ ! -f "$QA_USER_CFG" ]]; then
+            echo "ERROR: QA_USER_PROFILE=1 but $QA_USER_CFG not found" >&2
+            exit 1
+        fi
+        base="$QA_USER_CFG"; ovr=_qa_user_overrides
+    fi
+    cp "$base" "$QA_CFG"
     local line key val
     while IFS= read -r line; do
         key=${line%%=*}
@@ -122,7 +159,7 @@ adapter_ensure_config() {
         else
             echo "$line" >> "$QA_CFG"
         fi
-    done < <(_qa_cfg_overrides)
+    done < <($ovr)
     [[ $existed -eq 0 ]] && echo "Created QA config: $QA_CFG"
 }
 ADAPTER_CONFIG="$QA_CFG"
@@ -438,6 +475,15 @@ draw_launch() {
     # macOS build takes the Unix branch); Windows reads LOCALAPPDATA.
     local qa_cache="$RESULTS_DIR/draw-cache"
     rm -rf "$qa_cache"; mkdir -p "$qa_cache"
+    # QA_USER_PROFILE: the user's config + data folders, copied fresh per launch
+    if [[ "$QA_USER_PROFILE" == 1 && "${QA_OS:-}" != Windows ]]; then
+        local qa_ucfg="$RESULTS_DIR/draw-user-config" qa_udata="$RESULTS_DIR/draw-user-data"
+        rm -rf "$qa_ucfg" "$qa_udata"; mkdir -p "$qa_ucfg" "$qa_udata"
+        [[ -d "$QA_USER_CONFIG_DIR" ]] && cp -a "$QA_USER_CONFIG_DIR" "$qa_ucfg/DRAW"
+        [[ -d "$QA_USER_DATA_DIR" ]] && cp -a "$QA_USER_DATA_DIR" "$qa_udata/DRAW"
+        export XDG_CONFIG_HOME="$qa_ucfg" XDG_DATA_HOME="$qa_udata"
+        info "User profile: $(basename "$QA_USER_CFG") + copies of $QA_USER_CONFIG_DIR and $QA_USER_DATA_DIR"
+    fi
     if [[ "${QA_OS:-}" == Windows ]]; then
         export LOCALAPPDATA; LOCALAPPDATA=$(cygpath -w "$qa_cache" 2>/dev/null || echo "$qa_cache")
     else
