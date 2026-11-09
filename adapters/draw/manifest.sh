@@ -493,7 +493,11 @@ draw_launch() {
     # against the current directory ("./ASSETS/..."), so running elsewhere breaks
     # palette .GPL previews and friends. Redirect (not tee) so DRAW_PID stays
     # DRAW's own pid for the xdotool window search below.
-    ( cd "$DRAW_ROOT" && exec "$DRAW_BIN" --config "$QA_CFG" $DRAW_EXTRA_ARGS $DRAW_TEST_OPTIONS ) > "$DRAW_CONSOLE_LOG" 2>&1 &
+    # QB64PE_NOPROMPT=y: a QB64-PE error that ON ERROR cannot trap (the _MEM
+    # errors 300-315, out of memory) prints "Runtime error: ..." to the console
+    # log and exits, instead of a kdialog / zenity alert - which reaches the
+    # user's real desktop (D-Bus / Wayland), not the offscreen display.
+    ( cd "$DRAW_ROOT" && QB64PE_NOPROMPT=y exec "$DRAW_BIN" --config "$QA_CFG" $DRAW_EXTRA_ARGS $DRAW_TEST_OPTIONS ) > "$DRAW_CONSOLE_LOG" 2>&1 &
     DRAW_PID=$!
 
     info "Waiting for window (up to ${timeout}s) — PID=$DRAW_PID"
