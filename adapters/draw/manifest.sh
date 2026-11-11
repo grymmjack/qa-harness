@@ -57,6 +57,8 @@ QA_CFG="$DRAW_ROOT/QA/DRAW.qa.cfg"
 # STOCK_DEFAULT_LAYOUT=0: the dock tests arrange panels in Default and read the
 # result from this file (DRAW's default 1 would ask for a workspace name instead;
 # tests/workspace-stock-default.sh turns it on for itself).
+# DRAWER_MINI_PALETTE=1: the suite was written with the Drawer's mini palette
+# (DRAW's default became off, 2026-11-10); drawer-minipal-off.sh turns it off.
 _qa_cfg_overrides() {
     cat <<'OVERRIDES'
 UI_SCALE=0
@@ -80,6 +82,7 @@ MUSIC_ENABLED=FALSE
 STOCK_DEFAULT_LAYOUT=0
 WORKSPACE_SAVE_PROMPT=0
 FPS_IDLE=60
+DRAWER_MINI_PALETTE=1
 OVERRIDES
     # [Windows] the OS enforces DRAW's window minimum on every resize (Xvfb has
     # no window manager, so Linux never does): its chrome needs 516 rows, and a
