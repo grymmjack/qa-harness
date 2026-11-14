@@ -316,12 +316,24 @@ _kill_tree() {   # _kill_tree PID [SIG] - children first, then the pid
 _run_test_guarded() {
     local test_file=$1 name=$2 limit state tpid t0 timed_out=0 fail0=$FAIL
     limit=$(_test_timeout_for "$test_file")
+    # a script that does not parse never ran: a FAIL, not a quiet pass
+    local perr
+    if ! perr=$(bash -n "$test_file" 2>&1); then
+        fail "$name — the test script does not parse: $(head -3 <<< "$perr" | tr '\n' ' ')"
+        return
+    fi
     state=$(mktemp "${TMPDIR:-/tmp}/qa-state.XXXXXX")
     (
+        # _QA_RC / _QA_DONE: how the script ended. It reaching its last line
+        # (or a deliberate 'exit 0') is a normal end; anything else - an unbound
+        # variable under set -u, a failed command under set -e, 'exit 1' - died
+        # part way, and the checks after that point never ran.
         # shellcheck disable=SC2064
-        trap "declare -p $_STATE_VARS ${ADAPTER_STATE_VARS:-} > '$state' 2>/dev/null" EXIT
+        trap "_QA_RC=\$?; { declare -p $_STATE_VARS ${ADAPTER_STATE_VARS:-} 2>/dev/null; echo \"_QA_RC=\$_QA_RC\"; echo \"_QA_DONE=\${_QA_DONE:-0}\"; } > '$state'" EXIT
+        _QA_DONE=0
         # shellcheck disable=SC1090
         source "$test_file"
+        _QA_DONE=1
     ) &
     tpid=$!
     t0=$SECONDS
@@ -338,10 +350,13 @@ _run_test_guarded() {
     wait "$tpid" 2>/dev/null
     # back into the runner's globals (declare -p output would be local in here)
     # shellcheck disable=SC1090
+    local _QA_RC=0 _QA_DONE=1
     [[ -s "$state" ]] && source <(sed 's/^declare /declare -g /' "$state")
     rm -f "$state"
     if (( timed_out )); then
         fail "$name — TIMED OUT after ${limit}s (killed; the run goes on). Raise it with '# QA-TIMEOUT: <s>' if the test is legitimately long"
+    elif [[ "$_QA_DONE" != 1 && "${_QA_RC:-0}" != 0 ]]; then
+        fail "$name — the test script DIED part way (exit $_QA_RC: an unbound variable, a failed command, 'exit'); the checks after that never ran - see the error above"
     fi
     # --fail-fast: a failure inside the subshell only ended the subshell
     if [[ $FAIL_FAST -eq 1 && $FAIL -gt $fail0 ]]; then
