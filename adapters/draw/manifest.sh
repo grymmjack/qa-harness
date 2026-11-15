@@ -447,6 +447,34 @@ adapter_pre_launch() {
         [[ "${QA_OS:-}" == Windows ]] && wsd=$(cygpath -w "$wsd" 2>/dev/null || echo "$wsd")
         DRAW_TEST_OPTIONS+=" --option WORKSPACES_DIR=$wsd"
     fi
+    # The config folder (DRAW.bindings - the keymap Customize Controls writes - TDF
+    # lists, AI cfg) is the user's real one unless the run copies a profile: give
+    # each normal-mode test a fresh copy of it without the keymap (tests assume the
+    # default keys), so no run writes the user's files. [Linux: XDG_CONFIG_HOME;
+    # macOS / Windows read their own folders and still share the user's.]
+    #     # QA-BINDINGS: ASSETS/PRESETS/deluxepaint.bindings
+    # starts the test with that file as its DRAW.bindings (repo-relative).
+    QA_CONFIG_DIR=""
+    if [[ "$QA_USER_PROFILE" != 1 && "$(uname -s)" == Linux ]]; then
+        local qcfg="$RESULTS_DIR/draw-qa-config" src bfile
+        rm -rf "$qcfg"; mkdir -p "$qcfg/DRAW"
+        src=$QA_USER_CONFIG_DIR   # (resolved when the adapter loaded, before any export)
+        if [[ -d "$src" ]]; then
+            for f in "$src"/*; do
+                [[ -f "$f" ]] || continue
+                case "${f##*/}" in DRAW.bindings|DRAW.cfg|DRAW.instance-*.cfg|*.log) continue ;; esac
+                cp -p "$f" "$qcfg/DRAW/"
+            done
+        fi
+        : > "$qcfg/DRAW/MIGRATED_TO_NATIVE.txt"   # (no first-run "settings moved" dialog)
+        bfile=$(grep -m1 -E '^[[:space:]]*#[[:space:]]*QA-BINDINGS:' "$test_file" 2>/dev/null)
+        bfile=$(echo ${bfile#*QA-BINDINGS:})
+        if [[ -n "$bfile" ]]; then
+            cp "$DRAW_ROOT/$bfile" "$qcfg/DRAW/DRAW.bindings" && info "Keymap: $bfile"
+        fi
+        export XDG_CONFIG_HOME="$qcfg"
+        QA_CONFIG_DIR="$qcfg/DRAW"
+    fi
     for kv in $line; do
         [[ "$kv" == *=* ]] || continue
         # [Windows] DRAW runs *_COMMAND through cmd.exe, which runs neither a .sh
