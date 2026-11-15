@@ -181,17 +181,24 @@ _ae_number() {
 # ImageMagick 6 has no `magick` command (only convert / identify / compare ...),
 # and tests write IM7 style: `magick -size ...`, `magick identify ...`. On an IM6
 # host (titan, Debian 12: 112 fixture-building DRAW tests found no fixture and
-# failed, 2026-11-15) map the IM7 forms onto the IM6 tools. Exported, so a test's
-# child bash scripts get it too.
+# failed, 2026-11-15) map the IM7 forms onto the IM6 tools. A real executable first
+# on PATH, not a bash function: tests also run it from python (`os.system("magick
+# ...")` goes through /bin/sh, which never sees an exported function - the sheet /
+# Aseprite import fixtures were still missing with the function).
 if ! command -v magick >/dev/null 2>&1 && command -v convert >/dev/null 2>&1; then
-    magick() {
-        case "${1:-}" in
-            convert|identify|compare|composite|montage|mogrify|stream|conjure)
-                local tool=$1; shift; command "$tool" "$@" ;;
-            *)  command convert "$@" ;;
-        esac
-    }
-    export -f magick
+    _QA_IM6_SHIM="${TMPDIR:-/tmp}/qa-harness-im6-$(id -u)"
+    mkdir -p "$_QA_IM6_SHIM"
+    cat > "$_QA_IM6_SHIM/magick.$$" <<'SHIM'
+#!/bin/sh
+# qa-harness: IM7 `magick` on an ImageMagick 6 host (core/assert.sh writes this)
+case "${1:-}" in
+    convert|identify|compare|composite|montage|mogrify|stream|conjure)
+        tool=$1; shift; exec "$tool" "$@" ;;
+esac
+exec convert "$@"
+SHIM
+    chmod +x "$_QA_IM6_SHIM/magick.$$" && mv -f "$_QA_IM6_SHIM/magick.$$" "$_QA_IM6_SHIM/magick"
+    case ":$PATH:" in *":$_QA_IM6_SHIM:"*) ;; *) export PATH="$_QA_IM6_SHIM:$PATH" ;; esac
 fi
 
 # Measure what one differing pixel reports as. ImageMagick 7 HDRI builds scale the
