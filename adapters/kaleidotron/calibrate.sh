@@ -63,7 +63,7 @@ env -u WAYLAND_DISPLAY \
     "$KT_BIN" --folder "$FIXTURES" >/dev/null 2>/tmp/kt-cal-stderr.log & KT_PID=$!
 
 for _ in $(seq 1 100); do
-    WID=$(DISPLAY="$DISP" xdotool search --pid "$KT_PID" --name kaleidotron 2>/dev/null | head -1)
+    WID=$(DISPLAY="$DISP" xdotool search --all --pid "$KT_PID" --name kaleidotron 2>/dev/null | head -1)
     [[ -n "$WID" ]] && break
     sleep 0.1
 done

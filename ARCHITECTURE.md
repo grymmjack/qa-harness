@@ -69,10 +69,13 @@ desktop and every region diff compares a static wrong frame. The runner emits
 most tests, but it bites any test that **quits and relaunches the app mid-file**
 (e.g. to reload a changed config). Two facts combine into a real failure:
 
-- Many toolkits (SDL2 / QB64-PE) set **no `_NET_WM_PID`** on their windows, so
-  `xdotool search --pid <PID> --name <title>` silently does **not** filter — a
-  bogus pid still matches every window with that title. Window matching is
-  title-only in practice.
+- `xdotool search --pid <PID> --name <title>` silently does **not** filter by
+  pid: xdotool ORs its conditions unless given `--all`, so a bogus pid still
+  matches every window with that title. (This was long blamed on the app setting
+  no `_NET_WM_PID`; older SDL2 / freeglut QB64-PE builds indeed set none, but
+  GLFW builds do and still matched by title alone.) The linux-x11 driver now
+  searches with `--all` and falls back to the title only for windows that have
+  no `_NET_WM_PID` (2026-11-15).
 - With no WM, a dying window is **not reaped promptly** — it stays mapped for a
   beat after the process is signalled.
 

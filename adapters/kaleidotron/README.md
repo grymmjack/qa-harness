@@ -129,7 +129,8 @@ painted affordances (selection, ratings, viewed checks, transparency backdrop).
 ## Two things worth knowing
 
 **Window matching is unambiguous, unlike DRAW.** eframe → winit sets
-`_NET_WM_PID` and `WM_CLASS`, so `xdotool search --pid` really does filter. This
+`_NET_WM_PID` and `WM_CLASS`, so `xdotool search --all --pid` really does filter
+(`--all` is required: without it xdotool ORs `--pid` with `--name`). This
 adapter therefore does **not** inherit the stale-window race documented in
 ARCHITECTURE.md and needs no `settle` helper. Keeping the pid in the search is
 also what stops a test binding the developer's own running kaleidotron.

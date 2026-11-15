@@ -145,9 +145,25 @@ driver_capture_full() {
 # ── window handles (the adapter keeps one per app instance) ─────────────────
 # driver_window_find PID TITLE → handle ("" = none). With a PID only that
 # process's windows match; without one, any window with the title.
+# `xdotool search` ORs its conditions unless given --all, so "--pid P --name T"
+# alone matches ANY window titled T - a relaunch then bound the previous
+# instance's still-closing window, which vanished a moment later (0x0 geometry,
+# "the test script DIED"; ~30 DRAW tests, 2026-11-15). --all ANDs them. A window
+# with no _NET_WM_PID (older SDL2 / freeglut QB64-PE builds) can never match a
+# pid, so for those the title alone decides, as it always did.
+_x11_find_pid_title() {  # PID TITLE → first matching window id
+    local w c
+    w=$(xdotool search --all --pid "$1" --name "$2" 2>/dev/null | head -1)
+    if [[ -z "$w" ]]; then
+        for c in $(xdotool search --name "$2" 2>/dev/null); do
+            xdotool getwindowpid "$c" >/dev/null 2>&1 || { w=$c; break; }
+        done
+    fi
+    echo "$w"
+}
 driver_window_find() {
     if [[ -n "${1:-}" ]]; then
-        xdotool search --pid "$1" --name "$2" 2>/dev/null | head -1
+        _x11_find_pid_title "$1" "$2"
     else
         xdotool search --name "$2" 2>/dev/null | head -1
     fi
@@ -196,7 +212,7 @@ driver_window_bounds_by_title() {
     local title=$1 pid=${2:-} wid=""   # wid MUST init: it's read at the title fallback
                                        # even when no pid is given (set -u safe)
     if [[ -n "$pid" ]]; then
-        wid=$(xdotool search --pid "$pid" --name "$title" 2>/dev/null | head -1)
+        wid=$(_x11_find_pid_title "$pid" "$title")
     fi
     [[ -z "$wid" ]] && wid=$(xdotool search --name "$title" 2>/dev/null | head -1)
     [[ -z "$wid" ]] && return 1

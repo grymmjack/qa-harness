@@ -171,7 +171,7 @@ adapter_launch() {
 
     local t=0
     while (( t < timeout * 10 )); do
-        if xdotool search --pid "$ADAPTER_PID" --name "$_KT_TITLE" >/dev/null 2>&1; then
+        if xdotool search --all --pid "$ADAPTER_PID" --name "$_KT_TITLE" >/dev/null 2>&1; then
             # The window being mapped is not the same as it being ready for input:
             # winit maps early, and the first frame (fonts, thumbnail decode) lands
             # a beat later. Without this the first click of a test can land on an
@@ -341,7 +341,7 @@ kt_assert_dominant() {
 }
 
 # ── 6. Lifecycle hooks ───────────────────────────────────────────────────────
-_kt_wid() { xdotool search --pid "${ADAPTER_PID:-0}" --name "$_KT_TITLE" 2>/dev/null | head -1; }
+_kt_wid() { xdotool search --all --pid "${ADAPTER_PID:-0}" --name "$_KT_TITLE" 2>/dev/null | head -1; }
 
 adapter_focus() {
     local w; w=$(_kt_wid); [[ -n "$w" ]] || return 0
