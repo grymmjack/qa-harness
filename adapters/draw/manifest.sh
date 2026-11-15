@@ -436,8 +436,17 @@ adapter_pre_launch() {
     [[ -f "$test_file" ]] || return 0
     local line kv
     line=$(grep -m1 -E '^[[:space:]]*#[[:space:]]*QA-OPTIONS:' "$test_file" 2>/dev/null)
-    [[ -n "$line" ]] || return 0
     line=${line#*QA-OPTIONS:}
+    # A workspace saves the layout changes made in it into its file, and DRAW's
+    # user workspaces folder is outside the QA config: unless the test pins its
+    # own (or runs on a copied user profile), give it an empty one of its own,
+    # so no run can write the user's real workspaces.
+    if [[ "$QA_USER_PROFILE" != 1 && " $line " != *" WORKSPACES_DIR="* ]]; then
+        local wsd="$RESULTS_DIR/draw-qa-workspaces"
+        rm -rf "$wsd"; mkdir -p "$wsd"
+        [[ "${QA_OS:-}" == Windows ]] && wsd=$(cygpath -w "$wsd" 2>/dev/null || echo "$wsd")
+        DRAW_TEST_OPTIONS+=" --option WORKSPACES_DIR=$wsd"
+    fi
     for kv in $line; do
         [[ "$kv" == *=* ]] || continue
         # [Windows] DRAW runs *_COMMAND through cmd.exe, which runs neither a .sh
