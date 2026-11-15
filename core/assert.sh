@@ -8,6 +8,7 @@
 #
 # Public API tests use:
 #   region NAME LX LY LW LH [desc]   declare a named logical rect (+ description)
+#   (ImageMagick 6 hosts get a `magick` function - see below)
 #   snap   NAME [label]              capture that region → a snap file
 #   assert_regions_differ A B [msg]  FAIL if two snaps are pixel-identical
 #   assert_regions_same   A B [msg]  FAIL if two snaps differ beyond tol
@@ -176,6 +177,22 @@ _ae_number() {
         print "0"
     }' <<< "$1"
 }
+
+# ImageMagick 6 has no `magick` command (only convert / identify / compare ...),
+# and tests write IM7 style: `magick -size ...`, `magick identify ...`. On an IM6
+# host (titan, Debian 12: 112 fixture-building DRAW tests found no fixture and
+# failed, 2026-11-15) map the IM7 forms onto the IM6 tools. Exported, so a test's
+# child bash scripts get it too.
+if ! command -v magick >/dev/null 2>&1 && command -v convert >/dev/null 2>&1; then
+    magick() {
+        case "${1:-}" in
+            convert|identify|compare|composite|montage|mogrify|stream|conjure)
+                local tool=$1; shift; command "$tool" "$@" ;;
+            *)  command convert "$@" ;;
+        esac
+    }
+    export -f magick
+fi
 
 # Measure what one differing pixel reports as. ImageMagick 7 HDRI builds scale the
 # AE metric by QuantumRange (a 1-pixel difference reads as 65535), so calibrate
