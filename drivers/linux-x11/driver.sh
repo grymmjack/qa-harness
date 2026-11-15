@@ -150,11 +150,12 @@ driver_capture_full() {
 # instance's still-closing window, which vanished a moment later (0x0 geometry,
 # "the test script DIED"; ~30 DRAW tests, 2026-11-15). --all ANDs them. A window
 # with no _NET_WM_PID (older SDL2 / freeglut QB64-PE builds) can never match a
-# pid, so for those the title alone decides, as it always did.
+# pid, so for those the title alone decides, as it always did. An empty TITLE
+# means "any window of that pid" and gets no title fallback.
 _x11_find_pid_title() {  # PID TITLE → first matching window id
     local w c
     w=$(xdotool search --all --pid "$1" --name "$2" 2>/dev/null | head -1)
-    if [[ -z "$w" ]]; then
+    if [[ -z "$w" && -n "$2" ]]; then   # (an empty title would match any pid-less window)
         for c in $(xdotool search --name "$2" 2>/dev/null); do
             xdotool getwindowpid "$c" >/dev/null 2>&1 || { w=$c; break; }
         done
