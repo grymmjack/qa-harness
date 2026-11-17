@@ -5,7 +5,7 @@
 // converted to points for events and window bounds on a Retina screen.
 // Key names are xdotool keysyms (the harness's language): a..z, 0..9, F1..F12,
 // Return Escape BackSpace Delete Tab space Home End Prior/Page_Up Next/Page_Down
-// Left Right Up Down, punctuation names (slash question grave bracketleft ...),
+// Left Right Up Down, KP_0..KP_9 KP_Add/Subtract/Multiply/Divide/Decimal/Enter, punctuation names (slash question grave bracketleft ...),
 // modifiers ctrl shift alt super (super = Command).
 //
 //   qa-io move X Y | moverel DX DY | down B | up B | click B      (B: 1 left, 2 middle, 3 right)
@@ -104,6 +104,11 @@ static const KeyDef KEYS[] = {
     {"End",0x77,0},{"Next",0x79,0},{"Page_Down",0x79,0},{"Left",0x7B,0},{"Right",0x7C,0},{"Down",0x7D,0},{"Up",0x7E,0},
     {"F1",0x7A,0},{"F2",0x78,0},{"F3",0x63,0},{"F4",0x76,0},{"F5",0x60,0},{"F6",0x61,0},{"F7",0x62,0},{"F8",0x64,0},
     {"F9",0x65,0},{"F10",0x6D,0},{"F11",0x67,0},{"F12",0x6F,0},
+    // keypad (GLFW reads the key code, so these are KP_* whatever Num Lock says)
+    {"KP_0",0x52,0},{"KP_1",0x53,0},{"KP_2",0x54,0},{"KP_3",0x55,0},{"KP_4",0x56,0},{"KP_5",0x57,0},
+    {"KP_6",0x58,0},{"KP_7",0x59,0},{"KP_8",0x5B,0},{"KP_9",0x5C,0},{"KP_Decimal",0x41,0},
+    {"KP_Multiply",0x43,0},{"KP_Add",0x45,0},{"KP_Subtract",0x4E,0},{"KP_Divide",0x4B,0},
+    {"KP_Enter",0x4C,0},{"KP_Equal",0x51,0},{"Num_Lock",0x47,0},{"Clear",0x47,0}, // Clear = GLFW's Num Lock
     // shifted punctuation (xdotool keysym names)
     {"question",0x2C,1},{"greater",0x2F,1},{"less",0x2B,1},{"asterisk",0x1C,1},{"braceleft",0x21,1},
     {"braceright",0x1E,1},{"numbersign",0x14,1},{"plus",0x18,1},{"underscore",0x1B,1},{"colon",0x29,1},
@@ -157,6 +162,7 @@ static int key_updown(const char *n, int down, CGEventFlags extra) {
     if (!find_key(n, &code, &shift)) { fprintf(stderr, "qa-io: unknown key '%s'\n", n); return 2; }
     CGEventRef e = CGEventCreateKeyboardEvent(g_src, (CGKeyCode)code, down);
     CGEventFlags f = cur_flags() | extra | (shift ? kCGEventFlagMaskShift : 0);
+    if (!strncmp(n, "KP_", 3)) f |= kCGEventFlagMaskNumericPad; // as a real keypad sends it
     CGEventSetFlags(e, f);
     CGEventPost(kCGHIDEventTap, e);
     CFRelease(e);

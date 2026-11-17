@@ -567,13 +567,23 @@ qa_main() {
     log "═══════════════════════════════════════════════════"
 
     # Collect test files (skip flags)
-    local -a TEST_FILES=()
+    local -a TEST_FILES=() _NOT_FOUND=()
     for arg in "$@"; do
         [[ "$arg" == --* ]] && continue
         # a bare --mode VALUE token (offscreen/onscreen/ask) is not a file, so the
         # -f guard below naturally skips it.
-        [[ -f "$arg" ]] && TEST_FILES+=("$arg")
+        if [[ -f "$arg" ]]; then TEST_FILES+=("$arg")
+        elif [[ "$arg" != offscreen && "$arg" != onscreen && "$arg" != ask ]]; then _NOT_FOUND+=("$arg"); fi
     done
+    # Tests were named but none exists: stop, never fall back to the whole suite.
+    # (A shell that did not split a list - zsh's unquoted $VAR - hands over ONE
+    # bogus path; the full-suite fallback then ran for hours, five times.)
+    if [[ ${#TEST_FILES[@]} -eq 0 && ${#_NOT_FOUND[@]} -gt 0 ]]; then
+        log "${RED}No such test file: ${_NOT_FOUND[0]:0:200}${RESET}"
+        (( ${#_NOT_FOUND[@]} > 1 )) && log "${RED}(and $(( ${#_NOT_FOUND[@]} - 1 )) more)${RESET}"
+        log "Name the files one argument each (zsh: \${=VAR} or a literal array), or none for the whole suite."
+        QA_ABORT_REASON="no such test file"; exit 2
+    fi
     if [[ ${#TEST_FILES[@]} -eq 0 ]]; then
         for f in "$TESTS_DIR"/*.sh; do
             [[ -f "$f" ]] && TEST_FILES+=("$f")

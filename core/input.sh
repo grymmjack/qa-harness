@@ -194,3 +194,12 @@ raw_move_rel() { driver_input_move_rel "$1" "$2"; }
 raw_button()   { driver_input_button "$1" "$2"; }      # down|up|click  1|2|3
 raw_key()      { driver_input_key_hold "$1" "$2"; }    # down|up  keyname
 raw_seq()      { driver_input_seq "$@"; }              # atomic: move X Y | down B | up B | key K | keydown K | keyup K | moverel DX DY
+
+# native_path PATH — the path as the app (a native program) can open it. On Windows
+# (Git Bash) /tmp/... and /c/... become C:/...; elsewhere it is unchanged. Use it for
+# any path a test hands the app through a FILE (a drop hook, a list) - Git Bash only
+# rewrites paths it sees as command-line arguments (2026-11-17: DRAW's drop tests
+# wrote /tmp/x.gif into the drop hook on Windows and nothing loaded).
+native_path() {
+    if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s\n' "$1"; fi
+}

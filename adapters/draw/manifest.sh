@@ -450,12 +450,15 @@ adapter_pre_launch() {
     # The config folder (DRAW.bindings - the keymap Customize Controls writes - TDF
     # lists, AI cfg) is the user's real one unless the run copies a profile: give
     # each normal-mode test a fresh copy of it without the keymap (tests assume the
-    # default keys), so no run writes the user's files. [Linux: XDG_CONFIG_HOME;
-    # macOS / Windows read their own folders and still share the user's.]
+    # default keys), so no run writes the user's files. [Linux + macOS:
+    # XDG_CONFIG_HOME - DRAW's $IF LINUX path code also runs on macOS (QB64-PE sets
+    # LINUX there), so a Mac DRAW reads ~/.config/DRAW and honours it (checked
+    # 2026-11-17: tests sharing the real folder broke later tests in a Mac run).
+    # Windows reads %APPDATA% and still shares the user's.]
     #     # QA-BINDINGS: ASSETS/PRESETS/deluxepaint.bindings
     # starts the test with that file as its DRAW.bindings (repo-relative).
     QA_CONFIG_DIR=""
-    if [[ "$QA_USER_PROFILE" != 1 && "$(uname -s)" == Linux ]]; then
+    if [[ "$QA_USER_PROFILE" != 1 && ( "$(uname -s)" == Linux || "$(uname -s)" == Darwin ) ]]; then
         local qcfg="$RESULTS_DIR/draw-qa-config" src bfile
         rm -rf "$qcfg"; mkdir -p "$qcfg/DRAW"
         src=$QA_USER_CONFIG_DIR   # (resolved when the adapter loaded, before any export)

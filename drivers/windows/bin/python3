@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# python3 shim: Windows Python writes text with \r\n, so `read` / $(...) in a test keep
+# a trailing \r and two identical-looking values differ (2026-11-17: animbrush-load's
+# CRC lists failed while printing the same text). Strip the \r; keep the exit status.
+# python3.exe resolves past this extension-less shim to the real interpreter.
+python3.exe "$@" | tr -d '\r'
+exit "${PIPESTATUS[0]}"

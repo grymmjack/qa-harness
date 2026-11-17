@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# magick shim: native magick.exe gets MSYS paths only where Git Bash rewrites them,
+# i.e. an argument that STARTS with "/". A format-prefixed path ("PNG32:/tmp/x.png",
+# "GIF:/c/..") is passed through untouched, so magick.exe fails to open it ("unable
+# to open image '/tmp/...'") - that broke every DRAW test that builds a PNG32 fixture
+# (2026-11-17: the anim "0 frames" group). Rewrite FMT:/path to FMT:C:/... here.
+# The legacy-name shims (convert / compare / identify) come through this one too.
+args=()
+for a in "$@"; do
+    if [[ "$a" =~ ^([A-Za-z0-9]{2,}):(/.*)$ ]]; then
+        a="${BASH_REMATCH[1]}:$(cygpath -m "${BASH_REMATCH[2]}" 2>/dev/null || echo "${BASH_REMATCH[2]}")"
+    fi
+    args+=("$a")
+done
+exec magick.exe "${args[@]}"

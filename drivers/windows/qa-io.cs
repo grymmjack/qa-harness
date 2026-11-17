@@ -98,6 +98,12 @@ static class QaIo {
         {"at",new[]{0x32,1,0}},{"dollar",new[]{0x34,1,0}},{"percent",new[]{0x35,1,0}},{"asciicircum",new[]{0x36,1,0}},
         {"ampersand",new[]{0x37,1,0}},{"parenleft",new[]{0x39,1,0}},{"parenright",new[]{0x30,1,0}},{"bar",new[]{0xDC,1,0}},
         {"asciitilde",new[]{0xC0,1,0}},
+        // keypad: sent as scan codes, so GLFW sees KP_* whatever Num Lock says
+        {"KP_0",new[]{0x60,0,0}},{"KP_1",new[]{0x61,0,0}},{"KP_2",new[]{0x62,0,0}},{"KP_3",new[]{0x63,0,0}},
+        {"KP_4",new[]{0x64,0,0}},{"KP_5",new[]{0x65,0,0}},{"KP_6",new[]{0x66,0,0}},{"KP_7",new[]{0x67,0,0}},
+        {"KP_8",new[]{0x68,0,0}},{"KP_9",new[]{0x69,0,0}},{"KP_Multiply",new[]{0x6A,0,0}},{"KP_Add",new[]{0x6B,0,0}},
+        {"KP_Subtract",new[]{0x6D,0,0}},{"KP_Decimal",new[]{0x6E,0,0}},{"KP_Divide",new[]{0x6F,0,1}},
+        {"KP_Enter",new[]{0x0D,0,1}},
     };
     static readonly Dictionary<string, int[]> Mods = new Dictionary<string, int[]>(StringComparer.OrdinalIgnoreCase) {
         {"ctrl",new[]{0xA2,0}},{"control",new[]{0xA2,0}},{"Control_L",new[]{0xA2,0}},
