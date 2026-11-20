@@ -59,6 +59,12 @@ QA_CFG="$DRAW_ROOT/QA/DRAW.qa.cfg"
 # tests/workspace-stock-default.sh turns it on for itself).
 # DRAWER_MINI_PALETTE=1: the suite was written with the Drawer's mini palette
 # (DRAW's default became off, 2026-11-10); drawer-minipal-off.sh turns it off.
+# WORKSPACE=default + WORKSPACE_HOME=default: DRAW 2.9.1+ starts in DEFAULT 2 and hides the
+# plain Default from its lists (Rick 2026-11-20); the suite was written in the plain Default
+# (the no-overlay base) and switches back to it by name ("workspace: default"), so pin both.
+# SELECTION_BAR=FALSE: the Tool Options bar (DRAW's tool-options branch: a dock row for
+# most tools) stays off, so no test's geometry moves when it shows; the bar's own tests
+# turn it on with "# QA-OPTIONS: SELECTION_BAR=TRUE" (2026-11-19)
 _qa_cfg_overrides() {
     cat <<'OVERRIDES'
 UI_SCALE=0
@@ -85,6 +91,9 @@ WORKFLOW_BAR=0
 LAYER_PANEL_BAR=OFF
 FPS_IDLE=60
 DRAWER_MINI_PALETTE=1
+SELECTION_BAR=FALSE
+WORKSPACE=default
+WORKSPACE_HOME=default
 OVERRIDES
     # [Windows] the OS enforces DRAW's window minimum on every resize (Xvfb has
     # no window manager, so Linux never does): its chrome needs 516 rows, and a
@@ -418,7 +427,9 @@ open_effect() {
     sleep 0.25
     click $(( 420 + MENU_DX )) "$caty"     # category row -> opens flyout
     sleep 0.25
-    click $(( 560 + MENU_DX )) "$childy"   # child effect (flyout moved right — wide pinned labels)
+    # child effect: the flyout's middle. 2026-11-18: the UPPERCASE menu labels widened the
+    # dropdown, so its flyout starts ~589 (viewport) - x 560 now missed it to the left.
+    click $(( 640 + MENU_DX )) "$childy"
     sleep 0.3
 }
 
