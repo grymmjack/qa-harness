@@ -5,7 +5,7 @@
 // space as `capture`. Keys are xdotool keysym names; they are sent as SCAN codes
 // (GLFW identifies keys by scan code - a VK-only event reaches it as "unknown").
 //
-//   qa-io move X Y | moverel DX DY | down B | up B | click B     (B: 1 left, 2 middle, 3 right)
+//   qa-io move X Y | moverel DX DY | down B | up B | click B     (B: 1 left, 2 middle, 3 right, 8 back, 9 forward)
 //   qa-io keydown K | keyup K | key COMBO | type TEXT | scroll up|down [N]
 //   qa-io capture FILE.png              (the primary screen)
 //   qa-io find PID TITLE | title H | bounds H (frame) | client H (client area) | activate H | pid H
@@ -53,7 +53,7 @@ static class QaIo {
     [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int attr, out RECT r, int size);
 
     const uint INPUT_MOUSE = 0, INPUT_KEYBOARD = 1;
-    const uint MOVE = 0x0001, LDOWN = 0x0002, LUP = 0x0004, RDOWN = 0x0008, RUP = 0x0010, MDOWN = 0x0020, MUP = 0x0040, WHEEL = 0x0800, ABSOLUTE = 0x8000, VIRTUALDESK = 0x4000;
+    const uint MOVE = 0x0001, LDOWN = 0x0002, LUP = 0x0004, RDOWN = 0x0008, RUP = 0x0010, MDOWN = 0x0020, MUP = 0x0040, XDOWN = 0x0080, XUP = 0x0100, WHEEL = 0x0800, ABSOLUTE = 0x8000, VIRTUALDESK = 0x4000;
     const uint KEYUP = 0x0002, SCANCODE = 0x0008, UNICODE = 0x0004, EXTENDED = 0x0001;
 
     static void Ms(int n) { Thread.Sleep(n); }
@@ -71,9 +71,17 @@ static class QaIo {
         Send(i);
         SetCursorPos(x, y);
     }
+    // B as xdotool numbers them: 1 left, 2 middle, 3 right, 8 back (XBUTTON1),
+    // 9 forward (XBUTTON2). 8 / 9 used to fall through to the middle button.
     static void Button(int b, bool down) {
-        uint f = b == 1 ? (down ? LDOWN : LUP) : b == 3 ? (down ? RDOWN : RUP) : (down ? MDOWN : MUP);
-        var i = new INPUT { type = INPUT_MOUSE }; i.u.mi.dwFlags = f; Send(i);
+        var i = new INPUT { type = INPUT_MOUSE };
+        if (b == 8 || b == 9) {
+            i.u.mi.dwFlags = down ? XDOWN : XUP;
+            i.u.mi.mouseData = (uint)(b == 8 ? 1 : 2);
+        } else {
+            i.u.mi.dwFlags = b == 1 ? (down ? LDOWN : LUP) : b == 3 ? (down ? RDOWN : RUP) : (down ? MDOWN : MUP);
+        }
+        Send(i);
     }
     static void Scroll(bool up, int n) {
         for (int k = 0; k < n; k++) {

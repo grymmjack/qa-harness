@@ -8,7 +8,7 @@
 // Left Right Up Down, KP_0..KP_9 KP_Add/Subtract/Multiply/Divide/Decimal/Enter, punctuation names (slash question grave bracketleft ...),
 // modifiers ctrl shift alt super (super = Command).
 //
-//   qa-io move X Y | moverel DX DY | down B | up B | click B      (B: 1 left, 2 middle, 3 right)
+//   qa-io move X Y | moverel DX DY | down B | up B | click B      (B: 1 left, 2 middle, 3 right, 8 back, 9 forward)
 //   qa-io keydown K | keyup K | key COMBO (ctrl+shift+n) | type TEXT
 //   qa-io scroll up|down [N]
 //   qa-io serve | stop | ping   (one long-lived process posts all input - see serve())
@@ -243,6 +243,9 @@ static int button(int b, int down) {
         case 1: t = down ? kCGEventLeftMouseDown : kCGEventLeftMouseUp; mb = kCGMouseButtonLeft; break;
         case 3: t = down ? kCGEventRightMouseDown : kCGEventRightMouseUp; mb = kCGMouseButtonRight; break;
         case 2: t = down ? kCGEventOtherMouseDown : kCGEventOtherMouseUp; mb = kCGMouseButtonCenter; break;
+        // thumb buttons as xdotool numbers them: 8 back, 9 forward = CG buttons 3 / 4
+        // (GLFW reports [event buttonNumber], so 3 / 4 are its 4th / 5th buttons)
+        case 8: case 9: t = down ? kCGEventOtherMouseDown : kCGEventOtherMouseUp; mb = (CGMouseButton)(b - 5); break;
         default: fprintf(stderr, "qa-io: button %d?\n", b); return 2;
     }
     st_load();
