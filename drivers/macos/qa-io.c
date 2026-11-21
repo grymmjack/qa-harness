@@ -194,18 +194,44 @@ static int key_combo(const char *combo) {
     return r;
 }
 
+// an ASCII character -> the KEYS name of the US-layout key that types it (NULL = none)
+static const char *char_key(UniChar c) {
+    static char one[2];
+    static const char *P[][2] = {
+        {" ","space"},{".","period"},{"/","slash"},{"-","minus"},{"=","equal"},{",","comma"},
+        {";","semicolon"},{"'","apostrophe"},{"[","bracketleft"},{"]","bracketright"},{"\\","backslash"},
+        {"`","grave"},{"?","question"},{">","greater"},{"<","less"},{"*","asterisk"},{"{","braceleft"},
+        {"}","braceright"},{"#","numbersign"},{"+","plus"},{"_","underscore"},{":","colon"},{"\"","quotedbl"},
+        {"!","exclam"},{"@","at"},{"$","dollar"},{"%","percent"},{"^","asciicircum"},{"&","ampersand"},
+        {"(","parenleft"},{")","parenright"},{"|","bar"},{"~","asciitilde"},{"\n","Return"},{"\t","Tab"},
+        {NULL,NULL}};
+    if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) { one[0] = (char)c; one[1] = 0; return one; }
+    for (int i = 0; P[i][0]; i++) if ((UniChar)P[i][0][0] == c) return P[i][1];
+    return NULL;
+}
+
 static void type_text(const char *s) {
-    // one UTF-16 unit per char - the app gets the character, whatever the layout
+    // each character on the key that types it (+ a real Shift), carrying the character
+    // too: QB64-PE's GLFW path reads the KEY CODE, so a key-code-0 event typed 'a' for
+    // every character. Anything off the US layout keeps code 0 + the character.
     CFStringRef str = CFStringCreateWithCString(NULL, s, kCFStringEncodingUTF8);
     CFIndex len = CFStringGetLength(str);
+    const ModDef *sh = find_mod("shift");
     for (CFIndex i = 0; i < len; i++) {
         UniChar c = CFStringGetCharacterAtIndex(str, i);
+        const char *kn = char_key(c);
+        int code = 0, shift = 0;
+        if (!kn || !find_key(kn, &code, &shift)) { code = 0; shift = 0; kn = NULL; }
+        if (shift) { post_mod(sh, 1); ms(20); }
         for (int down = 1; down >= 0; down--) {
-            CGEventRef e = CGEventCreateKeyboardEvent(g_src, 0, down);
+            CGEventRef e = CGEventCreateKeyboardEvent(g_src, (CGKeyCode)code, down);
             CGEventKeyboardSetUnicodeString(e, 1, &c);
+            if (kn) CGEventSetFlags(e, cur_flags());
             CGEventPost(kCGHIDEventTap, e);
             CFRelease(e);
+            if (down) ms(15);
         }
+        if (shift) { ms(15); post_mod(sh, 0); }
         ms(30);
     }
     CFRelease(str);
