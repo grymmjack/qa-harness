@@ -176,11 +176,20 @@ static int key_combo(const char *combo) {
     char *parts[16]; int n = 0;
     for (char *t = strtok(buf, "+"); t && n < 16; t = strtok(NULL, "+")) parts[n++] = t;
     if (n == 0) return 2;
-    if (n == 1) { int r = key_updown(parts[0], 1, 0); ms(100); key_updown(parts[0], 0, 0); ms(50); return r; }
+    // a shifted key (greater, exclam, A ...) gets a real Shift press around it: a Shift
+    // FLAG alone leaves the event's characters unshifted ('>' arrives as '.'), as the
+    // characters are worked out from the keyboard state, not the flags
+    int code, need = 0;
+    const ModDef *sh = find_mod("shift");
+    if (!find_mod(parts[n - 1]) && find_key(parts[n - 1], &code, &need) && need
+        && !(cur_flags() & kCGEventFlagMaskShift)) { post_mod(sh, 1); ms(60); } else need = 0;
+    if (n == 1) { int r = key_updown(parts[0], 1, 0); ms(100); key_updown(parts[0], 0, 0); ms(50);
+                  if (need) { post_mod(sh, 0); ms(50); } return r; }
     for (int i = 0; i < n - 1; i++) { const ModDef *m = find_mod(parts[i]); if (!m) { fprintf(stderr, "qa-io: not a modifier '%s'\n", parts[i]); return 2; } post_mod(m, 1); ms(60); }
     ms(60);
     int r = key_updown(parts[n - 1], 1, 0); ms(200); key_updown(parts[n - 1], 0, 0); ms(40);
     for (int i = n - 2; i >= 0; i--) post_mod(find_mod(parts[i]), 0);
+    if (need) post_mod(sh, 0);
     ms(50);
     return r;
 }
