@@ -104,6 +104,7 @@ static const KeyDef KEYS[] = {
     {"End",0x77,0},{"Next",0x79,0},{"Page_Down",0x79,0},{"Left",0x7B,0},{"Right",0x7C,0},{"Down",0x7D,0},{"Up",0x7E,0},
     {"F1",0x7A,0},{"F2",0x78,0},{"F3",0x63,0},{"F4",0x76,0},{"F5",0x60,0},{"F6",0x61,0},{"F7",0x62,0},{"F8",0x64,0},
     {"F9",0x65,0},{"F10",0x6D,0},{"F11",0x67,0},{"F12",0x6F,0},
+    {"Insert",0x72,0},{"Help",0x72,0}, // a Mac has no Insert: GLFW reads the Help key (0x72) as GLFW_KEY_INSERT
     // keypad (GLFW reads the key code, so these are KP_* whatever Num Lock says)
     {"KP_0",0x52,0},{"KP_1",0x53,0},{"KP_2",0x54,0},{"KP_3",0x55,0},{"KP_4",0x56,0},{"KP_5",0x57,0},
     {"KP_6",0x58,0},{"KP_7",0x59,0},{"KP_8",0x5B,0},{"KP_9",0x5C,0},{"KP_Decimal",0x41,0},
